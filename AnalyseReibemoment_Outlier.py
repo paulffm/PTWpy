@@ -6,24 +6,19 @@ from keras.optimizers import Adam, SGD, Adadelta, Adagrad, Adamax, Nadam, Ftrl
 from keras.layers import Dropout
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.gaussian_process import GaussianProcessRegressor
 import xgboost as xgb
 from sklearn import svm
 from sklearn.kernel_ridge import KernelRidge
 from sklearn.model_selection import train_test_split
-from keras.callbacks import EarlyStopping, ModelCheckpoint
-import plotly.express as px
 import plotly.graph_objects as go
-from plotly.offline import plot
-from matplotlib import pyplot as plt
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
-from sklearn.metrics import max_error
 from scipy.signal import butter, cheby1, filtfilt
-from sklearn.ensemble import IsolationForest
-from sklearn.neighbors import LocalOutlierFactor
+
 
 
 def nn_reg(n_inputs, n_outputs):
@@ -53,7 +48,7 @@ def get_model(n_inputs, n_outputs):
     model.add(Dense(50, activation=lrelu))
     model.add(Dense(30, activation=lrelu))
     model.add(Dense(n_outputs, activation='linear'))
-    optimizer = optimizers.Adam(learning_rate=0.08)
+    optimizer = Adam(learning_rate=0.08)
     model.compile(loss='mse', optimizer='adam', metrics=['mse', 'mae'])
     return model
 
@@ -82,22 +77,19 @@ def data_shift(X, window, forw, inp):
 
 def scaling_method(method):
     if method == 'MinMax(0.1)':
-        scaler_x_test = MinMaxScaler(feature_range=(0, 1))
-        scaler_x_tr = MinMaxScaler(feature_range=(0, 1))
-        scaler_y_test = MinMaxScaler(feature_range=(0, 1))
-        scaler_y_tr = MinMaxScaler(feature_range=(0, 1))
-    elif method == 'MinMax()':
-        scaler_x_test = MinMaxScaler()
-        scaler_x_tr = MinMaxScaler()
-        scaler_y_test = MinMaxScaler()
-        scaler_y_tr = MinMaxScaler()
-    elif method == 'Standard':
-        scaler_x_test = StandardScaler()
-        scaler_x_tr = StandardScaler()
-        scaler_y_test = StandardScaler()
-        scaler_y_tr = StandardScaler()
+        scaler_x = MinMaxScaler(feature_range=(0, 1))
+        scaler_y = MinMaxScaler(feature_range=(0, 1))
 
-    return scaler_x_tr, scaler_x_test, scaler_y_tr, scaler_y_test
+    elif method == 'MinMax()':
+        scaler_x = MinMaxScaler()
+        scaler_y = MinMaxScaler()
+
+    elif method == 'Standard':
+        scaler_x = StandardScaler()
+        scaler_y = StandardScaler()
+
+
+    return scaler_x, scaler_y
 
 
 def main():
@@ -126,19 +118,6 @@ def main():
     inp = [f'DES_POS|{active_axis}', f'VEL_FFW|{active_axis}', f'TORQUE_FFW|{active_axis}',
            f'CONT_DEV|{active_axis}', f'ENC1_POS|{active_axis}', f'ENC2_POS|{active_axis}']
 
-    '''inp = [f'DES_POS|{active_axis}',f'VEL_FFW|{active_axis}', f'TORQUE_FFW|{active_axis}', 
-           f'CONT_DEV|{active_axis}', f'CTRL_DIFF2|{active_axis}', f'CMD_SPEED|{active_axis}']'''
-    # f'DES_POS|{active_axis}',
-    # f'TORQUE|1']#, f'CTRL_DIFF2|{active_axis}']
-    # f'CONT_DEV|{active_axis}']
-    # f'CTRL_DIFF2|{active_axis}']
-    # 'POWER|1']
-    # f'ENC1_POS|{active_axis}', f'ENC2_POS|{active_axis}']
-    # f'CONT_DEV|{active_axis}', 'CONT_DEV|2', 'CONT_DEV|3']
-    # f'CTRL_DIFF|{active_axis}']
-    # f'CONT_DEV|{active_axis}', f'CMD_SPEED|{active_axis}', f'CTRL_DIFF2|{active_axis}']
-    # f'TORQUE|1']#, f'ENC1_POS|{active_axis}' - f'ENC2_POS|{active_axis}']
-    # f'CONT_DEV|{active_axis}'], f'CMD_SPEED|{active_axis}', f'CTRL_DIFF2|{active_axis}']
     input_list = [inp]
     spec_dct = {'active axis': active_axis,
                 'input': input_list[input],
@@ -180,10 +159,12 @@ def main():
     X = data[input_list[input]]
     y = data[out_arr]
 
+
     # kick enc1,2 and get only diff of them
     X['Enc_diff'] = X[f'ENC1_POS|{active_axis}'] - X[f'ENC2_POS|{active_axis}']
     X = X.drop([f'ENC1_POS|{active_axis}', f'ENC2_POS|{active_axis}'], axis=1)
     inp = X.columns.values.tolist()
+
 
     # filter signals
     order = 1
@@ -208,21 +189,25 @@ def main():
     # shifting data to include past values
     if shifting == 1:
         X = data_shift(X, step, forw, inp)
-    print(X)
+
+
+    # scaling
+    if scaling == 1:
+        scaler_x_r = RobustScaler()
+        scaler_y_r = RobustScaler()
+        X = scaler_x_r.fit_transform(X)
+        y_butter = scaler_y_r.fit_transform(y_butter)
+
+        scaler_x_m, scaler_y_m = scaling_method(method)
+        X = scaler_x_m.fit_transform(X)
+        y_butter = scaler_y_m.fit_transform(y_butter)
+
 
     # CV or split
     X_train, X_test, y_train, y_test = train_test_split(X, y_butter, test_size=0.4, random_state=1)
 
-    # scaling the data
-    if scaling == 1:
-        scaler_x_tr, scaler_x, scaler_y_tr, scaler_y = scaling_method(method)
 
-        X = scaler_x.fit_transform(X)
-        y_butter = scaler_y.fit_transform(y_butter)
 
-        # scaling train
-        X_train = scaler_x_tr.fit_transform(X_train)
-        y_train = scaler_y_tr.fit_transform(y_train)
 
     # to array for outlier detection
     '''X_train = np.asarray(X_train)
@@ -264,10 +249,11 @@ def main():
 
     # inverse transformation
     if scaling == 1:
-        X_train = scaler_x_tr.inverse_transform(X_train)
-        X = scaler_x.inverse_transform(X)
-        y_butter = scaler_y.inverse_transform(y_butter)
-        y_pred = scaler_y.inverse_transform(np.asarray(y_pred).reshape(-1, 1))
+        y_butter = scaler_y_m.inverse_transform(y_butter)
+        y_butter = scaler_y_r.inverse_transform(y_butter)
+
+        y_pred = scaler_y_m.inverse_transform(np.asarray(y_pred).reshape(-1, 1))
+        y_pred = scaler_y_r.inverse_transform(y_pred)
 
     # max error
     y_diff = np.abs((y_butter) - (y_pred.reshape(-1, 1)))
@@ -351,4 +337,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
