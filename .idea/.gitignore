@@ -1,3 +1,6 @@
 # Default ignored files
 /shelf/
 /workspace.xml
+# need to be deleted from history
+/Data/dataFilter.csv
+/Data/2022-07-28_MRM_DMC850_20220509.MPF.csv
