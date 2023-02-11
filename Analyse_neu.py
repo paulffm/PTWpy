@@ -121,8 +121,7 @@ def main():
     yes_no = ['no', 'yes']
     search_list = ['Grid', 'Random', 'Bayes']
     # cmd,cont and ctrl, cont schlechter als cmd, cont, ctrldiff2 und schlechter als cont
-    inp = [f'DES_POS|{active_axis}', f'VEL_FFW|{active_axis}', f'TORQUE_FFW|{active_axis}',
-           f'CONT_DEV|{active_axis}', f'ENC1_POS|{active_axis}', f'ENC2_POS|{active_axis}']
+    inp = ['X1_v_dir_lp', 'X1_a_dir_lp']
 
     input_list = [inp]
     spec_dct = {'active axis': active_axis,
@@ -145,47 +144,51 @@ def main():
     blockVar = "/Channel/ProgramInfo/block|u1.2"
 
     # data: filtering better
-    file = '2022-07-28_MRM_DMC850_20220509.MPF.csv'
+    file = '/Users/paulheller/Desktop/PTW_Data/KohnData/2023-01-16T1253_MRM_DMC850_20220509_Filter.csv'
     data = pd.read_csv(file, sep=',', header=0, index_col=0, parse_dates=True, decimal=".")
-    # print('header', data.columns.values.tolist())
-    data['DateTime'] = pd.to_datetime(data["_time"])
+    print('header', data.columns.values.tolist())
+    print(data.head())
+    data['DateTime'] = pd.to_datetime(data["time_"])
     data['Date'] = data['DateTime'].dt.strftime('%Y-%m-%d')
-    data = data.sort_values(by="CYCLE")
+    #data = data.sort_values(by="CYCLE")
     # print(data)
 
     machine = "DMC850"
     measurement = "Lineare_Referenzfahrt_Feed"
-    data = data.sort_values(by="CYCLE")
+    #data = data.sort_values(by="CYCLE")
     data = data.fillna(method="ffill")
-    data = data.loc[data[axisVar] == active_axis]
+    #data = data.loc[data[axisVar] == active_axis]
     data = data.loc[data[measurementVar].str.contains(measurement)]
 
     # input, output
     out_arr = [f'CURRENT|{active_axis}']
     X = data[input_list[input]]
-    y = data[out_arr]
+    print(X)
+    data['X1_FR_lp'] = data['X1_FM_lp'] - data['X1_FB_dir_lp']
+    y = data['X1_FR_lp']
+    print(y)
 
     # kick enc1,2 and get only diff of them
-    X['Enc_diff'] = X[f'ENC1_POS|{active_axis}'] - X[f'ENC2_POS|{active_axis}']
-    X = X.drop([f'ENC1_POS|{active_axis}', f'ENC2_POS|{active_axis}'], axis=1)
-    inp = X.columns.values.tolist()
+    #X['Enc_diff'] = X[f'ENC1_POS|{active_axis}'] - X[f'ENC2_POS|{active_axis}']
+    #X = X.drop([f'ENC1_POS|{active_axis}', f'ENC2_POS|{active_axis}'], axis=1)
+    #inp = X.columns.values.tolist()
 
     # filter signals
     order = 1
-    b, a = butter(order, Wn=0.1, btype='lowpass')
+    b, a = butter(order, Wn=0.5, btype='lowpass')
     y_butter = filtfilt(b, a, y, axis=0)
     # X_butter = filtfilt(b, a, X, axis=0)
-    print('vergleich', y, y_butter)
+    y_butter = y_butter.reshape(-1, 1)
 
     # current over time plot to see how filter changes the current
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=data.index, y=y[f'CURRENT|{active_axis}'],
-                             name=f'CURRENT|{active_axis}'))  # , mode='markers', marker=dict(size=3)))
+    fig.add_trace(go.Scatter(x=data.index, y=y,
+                             name='X1_FR_lp'))  # , mode='markers', marker=dict(size=3)))
     fig.add_trace(go.Scatter(x=data.index, y=y_butter.flatten(),
-                             name=f'CURRENT|{active_axis} filtered'))  # , mode='markers',marker=dict(size=3)))
+                             name='X1_FR_lp filtered'))   # , mode='markers',marker=dict(size=3)))
     fig.update_layout(
-        title=f'CURRENT|{active_axis} over time',
-        yaxis_title=f'CURRENT|{active_axis}',
+        title=f'X1_FR_lp over time',
+        yaxis_title=f'X1_FR_lp',
         xaxis_title=f'time',
         font=dict(family="Tahoma", size=18, color="Black"))
     fig.show()
@@ -208,47 +211,17 @@ def main():
     # CV or split
     X_train, X_test, y_train, y_test = train_test_split(X, y_butter, test_size=0.4, random_state=1)
 
-    # to array for outlier detection
-    '''X_train = np.asarray(X_train)
-    y_train = np.asarray(y_train)
-    X = np.asarray(X)
-
-    # detect outliers 
-    lof = LocalOutlierFactor()
-    yhat = lof.fit_predict(X)
-    #iso = IsolationForest()
-    #yhat = iso.fit_predict(X)
-
-    # select all rows that are not outliers and remove them
-    mask = yhat != -1 
-    X, y_butter = X[mask, :], y_butter[mask]
-
-     # current over time plot to see how removed outliers change the current
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=data.index, y=y[f'CURRENT|{active_axis}'],
-                             name=f'CURRENT|{active_axis}'))  # , mode='markers', marker=dict(size=3)))
-    fig.add_trace(go.Scatter(x=data.index, y=y_butter.flatten(),
-                             name=f'CURRENT|{active_axis} filtered'))  # , mode='markers',marker=dict(size=3)))
-    fig.update_layout(
-        title=f'CURRENT|{active_axis} over time',
-        yaxis_title=f'CURRENT|{active_axis}',
-        xaxis_title=f'time',
-        font=dict(family="Tahoma", size=18, color="Black"))
-    fig.show()
-
-    #X = filtfilt(b, a, X, axis=0)
-    #X_train = filtfilt(b, a, X_train, axis=0)'''
-
     # train and predict
     print('predict')
-    n_inputs = X_train.shape[1]
+    '''n_inputs = X_train.shape[1]
     n_outputs = y_train.shape[1]
     batch_size = 30
     epochs = 10
     model = get_model(n_inputs, n_outputs)
-    # model = RandomForestRegressor(n_estimators=100, random_state=1, verbose=2, criterion="absolute_error")  # , criterion="absolute_error")
-    # model = xgb.XGBRegressor(learning_rate=0.05, n_estimators=1000, verbosity=2)
-    model.fit(np.asarray(X_train), y_train.flatten(), batch_size, epochs)  # , validation_split=0.2)
+    model.fit(np.asarray(X_train), y_train.flatten(), batch_size, epochs)'''
+    model = RandomForestRegressor(n_estimators=10, random_state=1, verbose=2)  # , criterion="absolute_error")
+    # model = xgb.XGBRegressor(learning_rate=0.05, n_estimators=100, verbosity=2)
+    model.fit(np.asarray(X_train), y_train.flatten())  # , validation_split=0.2)
     y_pred = model.predict(np.asarray(X))
 
     # inverse transformation
@@ -261,7 +234,7 @@ def main():
 
     # max error
     y_diff = np.abs((y_butter) - (y_pred.reshape(-1, 1)))
-    count = np.count_nonzero(y_diff > 0.1)
+    count = np.count_nonzero(y_diff > 100)
     print('Number of points with difference > 0.1:', count)
 
     idx = np.argsort(y_diff, axis=0)  # sorts along first axis (down)
@@ -282,13 +255,13 @@ def main():
     fig.add_trace(go.Scatter(x=y_butter.flatten(), y=y_pred.flatten(),
                              mode='markers', marker=dict(size=3)))
     fig.update_layout(
-        title=f'CURRENT|{active_axis} Curve',
-        xaxis_title=f'CURRENT|{active_axis}',
-        yaxis_title=f'CURRENT|{active_axis} predicted',
+        title=f'X1_FR_lp Curve',
+        xaxis_title=f'X1_FR_lp',
+        yaxis_title=f'X1_FR_lp predicted',
         font=dict(family="Tahoma", size=18, color="Black"))
     fig.show()
 
-    '''# pos
+    '''# pos 
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=data[f'ENC2_POS|{active_axis}'], y=y[f'CURRENT|{active_axis}'],
                              name=f'CURRENT|{active_axis}'))
@@ -321,19 +294,19 @@ def main():
 
     # plot of 'normal' current, filtered current, predicted current and all points with diff > 0.1
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=data.index, y=y[f'CURRENT|{active_axis}'],
-                             name=f'CURRENT|{active_axis}'))
+    fig.add_trace(go.Scatter(x=data.index, y=y['X1_FR_lp'],
+                             name=f'X1_FR_lp'))
     fig.add_trace(go.Scatter(x=data.index, y=y_pred,
-                             name=f'CURRENT|{active_axis} pred'))
+                             name='X1_FR_lp pred'))
     fig.add_trace(go.Scatter(x=data.index, y=y_butter.flatten(),
-                             name=f'CURRENT|{active_axis} filtered'))
+                             name=f'X1_FR_lp filtered'))
     fig.add_trace(go.Scatter(x=y_diff_idx, y=y_mostd.flatten(),
                              name=f'most difference', mode='markers',
                              marker=dict(size=10)))
 
     fig.update_layout(
-        title=f'CURRENT|{active_axis} over time',
-        yaxis_title=f'CURRENT|{active_axis}',
+        title=f'X1_FR_lp over time',
+        yaxis_title=f'X1_FR_lp',
         xaxis_title=f'time',
         font=dict(family="Tahoma", size=18, color="Black"))
     fig.show()
@@ -343,7 +316,4 @@ if __name__ == '__main__':
     main()
 
 
-git filter-branch --force --index-filter \
-    'git rm -r --cached --ignore-unmatch Data/dataFilter.csv' \
-   --prune-empty --tag-name-filter cat -- --all
 
