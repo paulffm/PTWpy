@@ -18,7 +18,7 @@ import plotly.graph_objects as go
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
 from scipy.signal import butter, cheby1, filtfilt
-
+import tensorflow as tf
 
 
 def nn_reg(n_inputs, n_outputs):
@@ -76,9 +76,9 @@ def data_shift(X, window, forw, inp):
 
 
 def scaling_method(method):
-    if method == 'MinMax(0.1)':
-        scaler_x = MinMaxScaler(feature_range=(0, 1))
-        scaler_y = MinMaxScaler(feature_range=(0, 1))
+    if method == 'MinMax(-1.1)':
+        scaler_x = MinMaxScaler(feature_range=(-1, 1))
+        scaler_y = MinMaxScaler(feature_range=(-1, 1))
 
     elif method == 'MinMax()':
         scaler_x = MinMaxScaler()
@@ -88,12 +88,18 @@ def scaling_method(method):
         scaler_x = StandardScaler()
         scaler_y = StandardScaler()
 
-
     return scaler_x, scaler_y
 
 
 def main():
     print('go')
+    if tf.test.gpu_device_name():
+        print('Hello')
+        print('Default GPU Device:{}'.format(tf.test.gpu_device_name()))
+    else:
+        print("Please install GPU version of TF")
+    print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+
     ### Parameter to choose:
     active_axis = 1
 
@@ -101,9 +107,9 @@ def main():
     input = 0
 
     # scaling: yes=1 no=0 -> for RF=0 for NN=1 and Standard
-    # Scaling method: 'MinMax(0.1)', 'MinMax()', 'Standard'
-    scaling = 0
-    method = 'Standard'
+    # Scaling method: 'MinMax(-1.1)', 'MinMax()', 'Standard'
+    scaling = 1
+    method = 'MinMax(-1.1)'
 
     # shifting: yes=1 no=0, window_size: 3 Benchmark  ->nn=0 rf=1, step=3, forw=1
     # forw: if forward and backward shifting or only backwards: both=1 only backward=0
@@ -159,12 +165,10 @@ def main():
     X = data[input_list[input]]
     y = data[out_arr]
 
-
     # kick enc1,2 and get only diff of them
     X['Enc_diff'] = X[f'ENC1_POS|{active_axis}'] - X[f'ENC2_POS|{active_axis}']
     X = X.drop([f'ENC1_POS|{active_axis}', f'ENC2_POS|{active_axis}'], axis=1)
     inp = X.columns.values.tolist()
-
 
     # filter signals
     order = 1
@@ -190,7 +194,6 @@ def main():
     if shifting == 1:
         X = data_shift(X, step, forw, inp)
 
-
     # scaling
     if scaling == 1:
         scaler_x_r = RobustScaler()
@@ -202,12 +205,8 @@ def main():
         X = scaler_x_m.fit_transform(X)
         y_butter = scaler_y_m.fit_transform(y_butter)
 
-
     # CV or split
     X_train, X_test, y_train, y_test = train_test_split(X, y_butter, test_size=0.4, random_state=1)
-
-
-
 
     # to array for outlier detection
     '''X_train = np.asarray(X_train)
@@ -242,9 +241,14 @@ def main():
 
     # train and predict
     print('predict')
+    n_inputs = X_train.shape[1]
+    n_outputs = y_train.shape[1]
+    batch_size = 30
+    epochs = 10
+    model = get_model(n_inputs, n_outputs)
     # model = RandomForestRegressor(n_estimators=100, random_state=1, verbose=2, criterion="absolute_error")  # , criterion="absolute_error")
-    model = xgb.XGBRegressor(learning_rate=0.05, n_estimators=1000, verbosity=2)
-    model.fit(np.asarray(X_train), y_train.flatten())  # , validation_split=0.2)
+    # model = xgb.XGBRegressor(learning_rate=0.05, n_estimators=1000, verbosity=2)
+    model.fit(np.asarray(X_train), y_train.flatten(), batch_size, epochs)  # , validation_split=0.2)
     y_pred = model.predict(np.asarray(X))
 
     # inverse transformation
@@ -275,7 +279,7 @@ def main():
     # plots
     # y-y_pred plot
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=y_butter.flatten(), y=y_pred,
+    fig.add_trace(go.Scatter(x=y_butter.flatten(), y=y_pred.flatten(),
                              mode='markers', marker=dict(size=3)))
     fig.update_layout(
         title=f'CURRENT|{active_axis} Curve',
