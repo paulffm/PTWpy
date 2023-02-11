@@ -344,6 +344,6 @@ if __name__ == '__main__':
 
 
 git filter-branch --force --index-filter \
-    'git rm -r --cached --ignore-unmatch Data/2022-07-28_MRM_DMC850_20220509.MPF.csv' \
+    'git rm -r --cached --ignore-unmatch Data/dataFilter.csv' \
    --prune-empty --tag-name-filter cat -- --all
 
