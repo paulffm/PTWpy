@@ -2,11 +2,21 @@
 from random import randint, uniform, choice
 from sklearn.utils.fixes import loguniform
 import numpy as np
-def loguniform(low=0, high=1):
-    return np.exp(uniform(low, high))
+import math
+
+class pattern_finder:
+    def __init__(self, idx1, idx2):
+        self.idx1 = idx1
+        self.idx2 = idx2
+
+    def find_motifs(self, data):
+        self.pattern = data[self.idx1:self.idx2]
+
+
+
 
 def main():
-    params = {
+    '''params = {
         'unit1': 0,
         'unit2': 0,
         'unit3': 0,
@@ -29,7 +39,12 @@ def main():
     print(params)
     print(params['unit1'])
     params['unit1'] = 1
-    print(params['unit1'])
+    print(params['unit1'])'''
+    data = np.arange(0, 11)
+
+    for i in range(5):
+        X = data[i:i+2]
+        print(f'{i+1}: {X}')
 
 if __name__ == '__main__':
     main()

@@ -104,7 +104,7 @@ def main():
     active_axis = 1
 
     # input: DES_POS, VEL_FFW, TORQUE_FFW: 0=from active axis, 1=from all axis -> 0 better
-    input = 0
+    inputs = 0
 
     # scaling: yes=1 no=0 -> for RF=0 for NN=1 and Standard
     # Scaling method: 'MinMax(-1.1)', 'MinMax()', 'Standard'
@@ -125,7 +125,7 @@ def main():
 
     input_list = [inp]
     spec_dct = {'active axis': active_axis,
-                'input': input_list[input],
+                'input': input_list[inputs],
                 'scaling': yes_no[scaling],
                 'scaling method': method,
                 'shifting': yes_no[shifting],
@@ -135,7 +135,20 @@ def main():
 
     ## data preparation
     feedVar = '/NC/_N_CH_GD9_ACX/SYG_S9|3'
-    measurementVar = '/NC/_N_CH_GD9_ACX/SYG_S9|4'
+    measurementVar = 'CH1_ProcessTag2'
+    axisVar = '/NC/_N_CH_GD9_ACX/SYG_I9|2'
+    loopVar1 = '/NC/_N_CH_GD9_ACX/SYG_I9|3'
+    loopVar2 = '/NC/_N_CH_GD9_ACX/SYG_I9|4'
+    loopVar3 = '/NC/_N_CH_GD9_ACX/SYG_I9|5'
+    msgVar = '/Channel/ProgramInfo/msg|u1'
+    blockVar = "/Channel/ProgramInfo/block|u1.2"
+
+    print(spec_dct)
+
+    ## data preparation
+    feedVar = '/NC/_N_CH_GD9_ACX/SYG_S9|3'
+    measurementVar = 'CH1_ProcessTag2'
+    # doesnt exist
     axisVar = '/NC/_N_CH_GD9_ACX/SYG_I9|2'
     loopVar1 = '/NC/_N_CH_GD9_ACX/SYG_I9|3'
     loopVar2 = '/NC/_N_CH_GD9_ACX/SYG_I9|4'
@@ -144,29 +157,30 @@ def main():
     blockVar = "/Channel/ProgramInfo/block|u1.2"
 
     # data: filtering better
-    file = '/Users/paulheller/Desktop/PTW_Data/KohnData/2023-01-16T1253_MRM_DMC850_20220509_Filter.csv'
+    file = '2023-01-16T1253_MRM_DMC850_20220509_Filter.csv'
     data = pd.read_csv(file, sep=',', header=0, index_col=0, parse_dates=True, decimal=".")
     print('header', data.columns.values.tolist())
-    print(data.head())
+    print(data)
     data['DateTime'] = pd.to_datetime(data["time_"])
     data['Date'] = data['DateTime'].dt.strftime('%Y-%m-%d')
-    #data = data.sort_values(by="CYCLE")
-    # print(data)
+    # data = data.sort_values(by="CYCLE")
 
     machine = "DMC850"
     measurement = "Lineare_Referenzfahrt_Feed"
-    #data = data.sort_values(by="CYCLE")
+    # data = data.sort_values(by="CYCLE")
     data = data.fillna(method="ffill")
-    #data = data.loc[data[axisVar] == active_axis]
-    data = data.loc[data[measurementVar].str.contains(measurement)]
+    print('NaN count', data.isna().sum())
+    data.mask(data == 'nan', None).ffill()
+    print('NaN count', data.isna().sum())
+    # data = data.loc[data[axisVar] == active_axis]
+    # 524.000
+    # print(data[measurementVar].str.contains(measurement, na=False).value_counts())
+    data = data.loc[data[measurementVar].str.contains(measurement, na=False)]
 
     # input, output
-    out_arr = [f'CURRENT|{active_axis}']
-    X = data[input_list[input]]
-    print(X)
+    X = data[input_list[inputs]]
     data['X1_FR_lp'] = data['X1_FM_lp'] - data['X1_FB_dir_lp']
     y = data['X1_FR_lp']
-    print(y)
 
     # kick enc1,2 and get only diff of them
     #X['Enc_diff'] = X[f'ENC1_POS|{active_axis}'] - X[f'ENC2_POS|{active_axis}']
@@ -300,7 +314,340 @@ def main():
                              name='X1_FR_lp pred'))
     fig.add_trace(go.Scatter(x=data.index, y=y_butter.flatten(),
                              name=f'X1_FR_lp filtered'))
+    fig.add_trace(go.Scatter(x=y_diff_idx, y=y_mostd.flatten(),import keras
+from keras import Sequential
+from keras.layers import LSTM
+from keras.layers import Dense
+from keras.optimizers import Adam, SGD, Adadelta, Adagrad, Adamax, Nadam, Ftrl
+from keras.layers import Dropout
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.gaussian_process import GaussianProcessRegressor
+import xgboost as xgb
+from sklearn import svm
+from sklearn.kernel_ridge import KernelRidge
+from sklearn.model_selection import train_test_split
+import plotly.graph_objects as go
+from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_absolute_error
+from scipy.signal import butter, cheby1, filtfilt
+import tensorflow as tf
+
+
+def nn_reg(n_inputs, n_outputs):
+    optimizer = Adam(learning_rate=0.001)
+    nn = Sequential()
+    nn.add(Dense(144, input_dim=n_inputs, activation='elu'))
+    nn.add(Dense(144, activation='elu'))
+    nn.add(Dense(144, activation='elu'))
+    nn.add(Dense(144, activation='elu'))
+    nn.add(Dense(144, activation='elu'))
+    nn.add(Dense(1, activation='linear'))
+    nn.compile(loss='mse', optimizer=optimizer, metrics=['mse', 'mae'])
+
+    return nn
+
+
+def get_model(n_inputs, n_outputs):
+    '''lr_schedule = keras.optimizers.schedules.ExponentialDecay(
+    initial_learning_rate=1e-2,
+    decay_steps=10000,
+    decay_rate=0.9)
+    optimizer = keras.optimizers.SGD(learning_rate=lr_schedule)'''
+    lrelu = keras.layers.LeakyReLU(alpha=0.001)
+    model = Sequential()
+    model.add(Dense(100, activation=lrelu, input_dim=n_inputs))  # kernel_initializer='normal'
+    model.add(Dense(50, activation=lrelu))
+    model.add(Dense(50, activation=lrelu))
+    model.add(Dense(30, activation=lrelu))
+    model.add(Dense(n_outputs, activation='linear'))
+    optimizer = Adam(learning_rate=0.08)
+    model.compile(loss='mse', optimizer='adam', metrics=['mse', 'mae'])
+    return model
+
+
+def data_shift(X, window, forw, inp):
+    # each look back/forward as another feature
+    X_plc = X
+    if forw == 1:
+        for i in range(window):
+            X_shift_bw = X.shift(periods=(i + 1), fill_value=0)
+            X_shift_fw = X.shift(periods=-(i + 1), fill_value=0)
+            inp_bw = [x + f'_-{i + 1}' for x in inp]
+            inp_fw = [x + f'_+{i + 1}' for x in inp]
+            X_shift_bw.columns = inp_bw
+            X_shift_fw.columns = inp_fw
+            X_plc = pd.concat([X_plc, X_shift_bw, X_shift_fw], axis=1)
+    else:
+        for i in range(window):
+            X_shift_bw = X.shift(periods=(i + 1), fill_value=0)
+            inp_bw = [x + f'_-{i + 1}' for x in inp]
+            X_shift_bw.columns = inp_bw
+            X_plc = pd.concat([X_plc, X_shift_bw], axis=1)
+
+    return X_plc
+
+
+def scaling_method(method):
+    if method == 'MinMax(-1.1)':
+        scaler_x = MinMaxScaler(feature_range=(-1, 1))
+        scaler_y = MinMaxScaler(feature_range=(-1, 1))
+
+    elif method == 'MinMax()':
+        scaler_x = MinMaxScaler()
+        scaler_y = MinMaxScaler()
+
+    elif method == 'Standard':
+        scaler_x = StandardScaler()
+        scaler_y = StandardScaler()
+
+    return scaler_x, scaler_y
+
+
+def main():
+    print('go')
+    if tf.test.gpu_device_name():
+        print('Hello')
+        print('Default GPU Device:{}'.format(tf.test.gpu_device_name()))
+    else:
+        print("Please install GPU version of TF")
+    print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+
+    ### Parameter to choose:
+    active_axis = 1
+
+    # input: DES_POS, VEL_FFW, TORQUE_FFW: 0=from active axis, 1=from all axis -> 0 better
+    inputs = 0
+
+    # scaling: yes=1 no=0 -> for RF=0 for NN=1 and Standard
+    # Scaling method: 'MinMax(-1.1)', 'MinMax()', 'Standard'
+    scaling = 1
+    method = 'MinMax(-1.1)'
+
+    # shifting: yes=1 no=0, window_size: 3 Benchmark  ->nn=0 rf=1, step=3, forw=1
+    # forw: if forward and backward shifting or only backwards: both=1 only backward=0
+    shifting = 1
+    step = 3
+    forw = 1
+
+    print('Specifications:')
+    yes_no = ['no', 'yes']
+    search_list = ['Grid', 'Random', 'Bayes']
+    # cmd,cont and ctrl, cont schlechter als cmd, cont, ctrldiff2 und schlechter als cont
+    inp = ['X1_v_dir_lp', 'X1_a_dir_lp']
+
+    input_list = [inp]
+    spec_dct = {'active axis': active_axis,
+                'input': input_list[inputs],
+                'scaling': yes_no[scaling],
+                'scaling method': method,
+                'shifting': yes_no[shifting],
+                'step size': step,
+                'forw': yes_no[forw]}
+    print(spec_dct)
+
+    ## data preparation
+    feedVar = '/NC/_N_CH_GD9_ACX/SYG_S9|3'
+    measurementVar = 'CH1_ProcessTag2'
+    axisVar = '/NC/_N_CH_GD9_ACX/SYG_I9|2'
+    loopVar1 = '/NC/_N_CH_GD9_ACX/SYG_I9|3'
+    loopVar2 = '/NC/_N_CH_GD9_ACX/SYG_I9|4'
+    loopVar3 = '/NC/_N_CH_GD9_ACX/SYG_I9|5'
+    msgVar = '/Channel/ProgramInfo/msg|u1'
+    blockVar = "/Channel/ProgramInfo/block|u1.2"
+
+    print(spec_dct)
+
+    ## data preparation
+    feedVar = '/NC/_N_CH_GD9_ACX/SYG_S9|3'
+    measurementVar = 'CH1_ProcessTag2'
+    # doesnt exist
+    axisVar = '/NC/_N_CH_GD9_ACX/SYG_I9|2'
+    loopVar1 = '/NC/_N_CH_GD9_ACX/SYG_I9|3'
+    loopVar2 = '/NC/_N_CH_GD9_ACX/SYG_I9|4'
+    loopVar3 = '/NC/_N_CH_GD9_ACX/SYG_I9|5'
+    msgVar = '/Channel/ProgramInfo/msg|u1'
+    blockVar = "/Channel/ProgramInfo/block|u1.2"
+
+    # data: filtering better
+    file = '2023-01-16T1253_MRM_DMC850_20220509_Filter.csv'
+    data = pd.read_csv(file, sep=',', header=0, index_col=0, parse_dates=True, decimal=".")
+    print('header', data.columns.values.tolist())
+    print(data)
+    data['DateTime'] = pd.to_datetime(data["time_"])
+    data['Date'] = data['DateTime'].dt.strftime('%Y-%m-%d')
+    # data = data.sort_values(by="CYCLE")
+
+    machine = "DMC850"
+    measurement = "Lineare_Referenzfahrt_Feed"
+    # data = data.sort_values(by="CYCLE")
+    data = data.fillna(method="ffill")
+    print('NaN count', data.isna().sum())
+    data.mask(data == 'nan', None).ffill()
+    print('NaN count', data.isna().sum())
+    # data = data.loc[data[axisVar] == active_axis]
+    # 524.000
+    # print(data[measurementVar].str.contains(measurement, na=False).value_counts())
+    data = data.loc[data[measurementVar].str.contains(measurement, na=False)]
+
+    # input, output
+    X = data[input_list[inputs]]
+    data['X1_FR_lp'] = data['X1_FM_lp'] - data['X1_FB_dir_lp']
+    y = data['X1_FR_lp']
+
+    # kick enc1,2 and get only diff of them
+    #X['Enc_diff'] = X[f'ENC1_POS|{active_axis}'] - X[f'ENC2_POS|{active_axis}']
+    #X = X.drop([f'ENC1_POS|{active_axis}', f'ENC2_POS|{active_axis}'], axis=1)
+    #inp = X.columns.values.tolist()
+
+    # filter signals
+    order = 1
+    b, a = butter(order, Wn=0.5, btype='lowpass')
+    y_butter = filtfilt(b, a, y, axis=0)
+    # X_butter = filtfilt(b, a, X, axis=0)
+    y_butter = y_butter.reshape(-1, 1)
+
+    # current over time plot to see how filter changes the current
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=data.index, y=y,
+                             name='X1_FR_lp'))  # , mode='markers', marker=dict(size=3)))
+    fig.add_trace(go.Scatter(x=data.index, y=y_butter.flatten(),
+                             name='X1_FR_lp filtered'))   # , mode='markers',marker=dict(size=3)))
+    fig.update_layout(
+        title=f'X1_FR_lp over time',
+        yaxis_title=f'X1_FR_lp',
+        xaxis_title=f'time',
+        font=dict(family="Tahoma", size=18, color="Black"))
+    fig.show()
+
+    # shifting data to include past values
+    if shifting == 1:
+        X = data_shift(X, step, forw, inp)
+
+    # scaling
+    if scaling == 1:
+        scaler_x_r = RobustScaler()
+        scaler_y_r = RobustScaler()
+        X = scaler_x_r.fit_transform(X)
+        y_butter = scaler_y_r.fit_transform(y_butter)
+
+        scaler_x_m, scaler_y_m = scaling_method(method)
+        X = scaler_x_m.fit_transform(X)
+        y_butter = scaler_y_m.fit_transform(y_butter)
+
+    # CV or split
+    X_train, X_test, y_train, y_test = train_test_split(X, y_butter, test_size=0.4, random_state=1)
+
+    # train and predict
+    print('predict')
+    '''n_inputs = X_train.shape[1]
+    n_outputs = y_train.shape[1]
+    batch_size = 30
+    epochs = 10
+    model = get_model(n_inputs, n_outputs)
+    model.fit(np.asarray(X_train), y_train.flatten(), batch_size, epochs)'''
+    model = RandomForestRegressor(n_estimators=10, random_state=1, verbose=2)  # , criterion="absolute_error")
+    # model = xgb.XGBRegressor(learning_rate=0.05, n_estimators=100, verbosity=2)
+    model.fit(np.asarray(X_train), y_train.flatten())  # , validation_split=0.2)
+    y_pred = model.predict(np.asarray(X))
+
+    # inverse transformation
+    if scaling == 1:
+        y_butter = scaler_y_m.inverse_transform(y_butter)
+        y_butter = scaler_y_r.inverse_transform(y_butter)
+
+        y_pred = scaler_y_m.inverse_transform(np.asarray(y_pred).reshape(-1, 1))
+        y_pred = scaler_y_r.inverse_transform(y_pred)
+
+    # max error
+    y_diff = np.abs((y_butter) - (y_pred.reshape(-1, 1)))
+    count = np.count_nonzero(y_diff > 200)
+    print('Number of points with difference > 0.1:', count)
+
+    idx = np.argsort(y_diff, axis=0)  # sorts along first axis (down)
+    idx = idx[::-1]
+    y_diff_sort = np.take_along_axis(y_diff, idx, axis=0)
+    print('Max diff:', y_diff_sort[:1])
+    idx = idx[:count].reshape(-1)
+
+    # error metrics: MSE, MAE
+    mse = mean_squared_error(y_butter, y_pred)
+    mae = mean_absolute_error(y_butter, y_pred)
+    print('MSE:', mse)
+    print('MAE:', mae)
+
+    # plots
+    # y-y_pred plot
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=y_butter.flatten(), y=y_pred.flatten(),
+                             mode='markers', marker=dict(size=3)))
+    fig.update_layout(
+        title=f'X1_FR_lp Curve',
+        xaxis_title=f'X1_FR_lp',
+        yaxis_title=f'X1_FR_lp predicted',
+        font=dict(family="Tahoma", size=18, color="Black"))
+    fig.show()
+
+    '''# pos 
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=data[f'ENC2_POS|{active_axis}'], y=y[f'CURRENT|{active_axis}'],
+                             name=f'CURRENT|{active_axis}'))
+    fig.add_trace(go.Scatter(x=data[f'ENC2_POS|{active_axis}'], y=y_pred,
+                             name=f'CURRENT|{active_axis} pred'))
+
+    fig.update_layout(
+        title=f'CURRENT|{active_axis} over ENC2_POS|{active_axis}',
+        xaxis_title=f'ENC2_POS|{active_axis}',
+        yaxis_title=f'CURRENT|{active_axis}',
+        font=dict(family="Tahoma", size=18, color="Black"))
+    fig.show()'''
+
+    '''# time
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=data.index, y=y[f'CURRENT|{active_axis}'],
+                             name=f'CURRENT|{active_axis}')) #, mode='markers', marker=dict(size=3)))
+    fig.add_trace(go.Scatter(x=data.index, y=y_pred,
+                             name=f'CURRENT|{active_axis} pred')) #, mode='markers',marker=dict(size=3)))
+    fig.update_layout(
+        title=f'CURRENT|{active_axis} over time',
+        yaxis_title=f'CURRENT|{active_axis}',
+        xaxis_title=f'time',
+        font=dict(family="Tahoma", size=18, color="Black"))
+    fig.show()'''
+
+    # idx for max diff in plot
+    y_diff_idx = (y.iloc[idx]).index
+    y_mostd = y_butter[idx]
+
+    # plot of 'normal' current, filtered current, predicted current and all points with diff > 0.1
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=data.index, y=y['X1_FR_lp'],
+                             name=f'X1_FR_lp'))
+    fig.add_trace(go.Scatter(x=data.index, y=y_pred,
+                             name='X1_FR_lp pred'))
+    fig.add_trace(go.Scatter(x=data.index, y=y_butter.flatten(),
+                             name=f'X1_FR_lp filtered'))
     fig.add_trace(go.Scatter(x=y_diff_idx, y=y_mostd.flatten(),
+                             name=f'most difference', mode='markers',
+                             marker=dict(size=10)))
+
+    fig.update_layout(
+        title=f'X1_FR_lp over time',
+        yaxis_title=f'X1_FR_lp',
+        xaxis_title=f'time',
+        font=dict(family="Tahoma", size=18, color="Black"))
+    fig.show()
+
+
+if __name__ == '__main__':
+    main()
+
+
+
+
                              name=f'most difference', mode='markers',
                              marker=dict(size=10)))
 
