@@ -9,9 +9,10 @@ from sklearn.metrics import mean_absolute_error
 from random import uniform, randint, choice, choices
 from scipy.signal import butter, cheby1, filtfilt
 from sklearn.ensemble import RandomForestRegressor
+import xgboost as xgb
 
 
-def plot_pred(y_pred, y_butter, y, idx):
+def plot_pred(y_pred, y_butter, y, idx, axis):
     '''
     :param y_pred:
     :param y_butter:
@@ -26,18 +27,18 @@ def plot_pred(y_pred, y_butter, y, idx):
     # plot of 'normal' current, filtered current, predicted current and all points with diff > 0.1
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=y.index, y=y,
-                             name=f'X1_FR_lp'))
-    fig.add_trace(go.Scatter(x=y.index, y=y_pred,
-                             name='X1_FR_lp pred'))
+                             name=f'{axis}1_FR_lp'))
+    fig.add_trace(go.Scatter(x=y.index, y=y_pred.flatten(),
+                             name=f'{axis}1_FR_lp pred'))
     fig.add_trace(go.Scatter(x=y.index, y=y_butter.flatten(),
-                             name=f'X1_FR_lp filtered'))
+                             name=f'{axis}1_FR_lp filtered'))
     fig.add_trace(go.Scatter(x=y_diff_idx, y=y_mostd.flatten(),
                              name=f'most difference', mode='markers',
                              marker=dict(size=10)))
 
     fig.update_layout(
-        title=f'X1_FR_lp over time',
-        yaxis_title=f'X1_FR_lp',
+        title=f'{axis}1_FR_lp over time',
+        yaxis_title=f'{axis}1_FR_lp',
         xaxis_title=f'time',
         font=dict(family="Tahoma", size=18, color="Black"))
     fig.show()
@@ -91,6 +92,29 @@ class random_search:
         self.best_params = dict()
         self.best_score = 1e9
 
+
+    def __build_model(self, model):
+        '''
+        :param model:
+        :return:
+        '''
+        if model == 'RandomForrest':
+            pass
+        elif model == 'XGBoost':
+
+            params = {'max_depth': randint(3, 20),
+                           'learning_rate': choice([0.01, 0.025, 0.05, 0.07, 0.1, 0.15]),
+                           'subsample': choice([0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]),
+                           'colsample_bytree': choice([0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]),
+                           'colsample_bylevel': choice([0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1])}
+
+            rf = xgb.XGBRegressor(learning_rate=params['learning_rate'], subsample=params['subsample'],
+                                  colsample_bytree=params['colsample_bytree'],
+                                  colsample_bylevel=params['colsample_bylevel'])
+            return rf, params
+        else:
+            pass
+
     def __calc_score(self, y_pred, y, params):
         '''
         :param y_pred:
@@ -119,9 +143,9 @@ class random_search:
         # print('Max diff:', score)
         idx = idx[:count].reshape(-1)
 
-        return score.flatten(), idx, y_pred
+        return score.flatten(), idx, y_pred, y
 
-    def fit_predict(self, data, y):
+    def fit_predict(self, model, data, y_all, axis):
         '''
         :param data:
         :param y:
@@ -131,23 +155,22 @@ class random_search:
         best_ypred = []
         best_idx = []
         for n_i in range(self.n_iter):
-            y_i = y
+            y = y_all
             print(f'Iteration: {n_i + 1}')
 
-            rf = RandomForestRegressor(n_estimators=100)
+            # build model
+            rf, params = self.__build_model(model)
 
-            params = {
-                # 'inputs': choices(0,1),
-                'shifting': randint(0, 1),
-                'scaling': randint(0, 1)
+            # params as scipy object: and rest
+            params['shifting'] = randint(0, 1)
+            params['scaling'] = randint(0, 1)
 
-            }
-            inp = ['X1_v_dir_lp', 'X1_a_dir_lp']
+            inp = [f'{axis}1_v_dir_lp', f'{axis}1_a_dir_lp']
             # inp.append(params['inputs'])
             X = data[inp]
 
             if params['shifting'] == 1:
-                window = randint(1, 4)
+                window = randint(1, 20)
                 params['step_size'] = window
                 forw = randint(0, 1)
                 params['forward'] = forw
@@ -160,20 +183,20 @@ class random_search:
                 scaler_x_r = RobustScaler()
                 scaler_y_r = RobustScaler()
                 X = scaler_x_r.fit_transform(X)
-                y_i = scaler_y_r.fit_transform(np.asarray(y_i).reshape(-1, 1))
+                y = scaler_y_r.fit_transform(np.asarray(y).reshape(-1, 1))
                 params['scaler_y_r'] = scaler_y_r
 
                 scaler_x_m, scaler_y_m = scaling_method(method)
                 X = scaler_x_m.fit_transform(X)
-                y_i = scaler_y_m.fit_transform(np.asarray(y_i).reshape(-1, 1))
+                y = scaler_y_m.fit_transform(np.asarray(y).reshape(-1, 1))
                 params['scaler_y_m'] = scaler_y_m
 
-            X_train, X_test, y_train, y_test = train_test_split(X, y_i, test_size=0.4, random_state=1)
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=1)
             rf.fit(X_train, y_train.ravel())
             y_pred = rf.predict(X)
 
-            score, idx, y_pred = self.__calc_score(np.asarray(y_pred).reshape(-1, 1), np.asarray(y_i).reshape(-1, 1),
-                                                        params)
+            score, idx, y_pred, y = self.__calc_score(np.asarray(y_pred).reshape(-1, 1), np.asarray(y).reshape(-1, 1),
+                                                      params)
 
             if score < self.best_score:
                 self.best_score = score
@@ -222,28 +245,47 @@ def main():
     data = data.loc[data[measurementVar].str.contains(measurement, na=False)]
 
     # output
-    data['X1_FR_lp'] = data['X1_FM_lp'] - data['X1_FB_dir_lp']
-    y = data['X1_FR_lp']
+    # 'X', 'Y', 'Z'
+    axis = 'Z'
+    data[f'{axis}1_FR_lp'] = data[f'{axis}1_FM_lp'] - data[f'{axis}1_FB_dir_lp']
+    y = data[f'{axis}1_FR_lp']
+    data = data.drop([f'{axis}1_FR_lp'], axis=1)
     # print(data)
-    data = data.drop(['X1_FR_lp'], axis=1)
-    print(data)
 
     # filter signals
     order = 1
     b, a = butter(order, Wn=0.1, btype='lowpass')
     y_butter = filtfilt(b, a, y, axis=0)
-    print('ybutter', y_butter)
 
-    n_iter = 25
+    n_iter = 70
+    # XGBoost, RandomForrest
+    model = 'XGBoost'
     # start random search:
     search_rg = random_search(n_iter)
-    y_pred, idx = search_rg.fit_predict(data, y_butter)
+    y_pred, idx = search_rg.fit_predict(model, data, y_butter, axis)
     print('Best params', search_rg.best_params)
     print('Best score', search_rg.best_score)
 
     # plot score
-    plot_pred(y_pred, y_butter, y, idx)
+    plot_pred(y_pred, y_butter, y, idx, axis)
 
 
 if __name__ == '__main__':
     main()
+# RF after 21 iterations
+'''Best Params: {'shifting': 1, 'scaling': 1, 'step_size': 4, 'forward': 0, 'scaling_method': 'Standard', 'scaler_y_r': RobustScaler(), 'scaler_y_m': StandardScaler()}
+Score: [474.39711064]; Best Score: [474.39711064]'''
+
+# XGB:
+# X1
+'''Best Params: {'shifting': 1, 'scaling': 1, 'step_size': 4, 'forward': 0, 'scaling_method': 'Standard', 'scaler_y_r': RobustScaler(), 'scaler_y_m': StandardScaler()}\nScore: [474.39711064]; Best Score: [474.39711064]"'''
+'''Best params {'shifting': 1, 'scaling': 1, 'step_size': 9, 'forward': 0, 'scaling_method': 'MinMax(-1.1)', 'scaler_y_r': RobustScaler(), 'scaler_y_m': MinMaxScaler(feature_range=(-1, 1))}
+Best score [470.62793066]'''
+# Y1
+'''Number of points with difference > 200: 237
+Best Params: {'shifting': 1, 'scaling': 0, 'step_size': 17, 'forward': 1}
+Score: [250.26284924]; Best Score: [250.26284924]'''
+# Z1
+'''Number of points with difference > 200: 912
+Best Params: {'shifting': 1, 'scaling': 0, 'step_size': 16, 'forward': 1}
+Score: [263.54339314]; Best Score: [263.54339314]'''

@@ -40,11 +40,12 @@ def main():
     print(params['unit1'])
     params['unit1'] = 1
     print(params['unit1'])'''
-    data = np.arange(0, 11)
+    a = np.arange(0, 11)
+    print(a)
+    print(choice(np.arange(0, 11)))
+    print(choice([0.5, 0.6, 0.7]))
+    print(choice([np.arange(0, 1, 0.5)]))
 
-    for i in range(5):
-        X = data[i:i+2]
-        print(f'{i+1}: {X}')
 
 if __name__ == '__main__':
     main()
