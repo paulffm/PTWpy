@@ -132,9 +132,9 @@ class random_search:
     def __build_nn(self, X_train, params):
         # building the model
 
-        optimizerD = {'Adam': Adam(learning_rate=params['learning_rate)'])}
+        #optimizerD = {'Adam': Adam(learning_rate=params['learning_rate'])}
         #opt = optimizerD[optimizerL]
-        opt = Adam(learning_rate=params['learning_rate)'])
+        opt = Adam(learning_rate=params['learning_rate'])
         n_inputs = X_train.shape[1]
         nn = Sequential()
         nn.add(Dense(params['unit1'], input_shape=(n_inputs,), activation=params['activation'],

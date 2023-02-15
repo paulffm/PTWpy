@@ -45,6 +45,7 @@ def main():
     print(choice(np.arange(0, 11)))
     print(choice([0.5, 0.6, 0.7]))
     print(choice([np.arange(0, 1, 0.5)]))
+    params['hallo'] = randint(0, 1)
 
 
 if __name__ == '__main__':

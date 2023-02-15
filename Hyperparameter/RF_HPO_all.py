@@ -112,8 +112,30 @@ class random_search:
                                   colsample_bytree=params['colsample_bytree'],
                                   colsample_bylevel=params['colsample_bylevel'])
             return rf, params
-        else:
+
+        elif model == 'NN':
+            params = {
+                'unit1': randint(50, 250),
+                'unit2': randint(50, 250),
+                'unit3': randint(50, 2500),
+                'activation': choice(['relu', 'sigmoid', 'tanh', 'elu']),
+                'learning_rate': choice([0.001, 0.0015, 0.002, 0.003, 0.007, 0.01, 0.015, 0.02, 0.03, 0.1]),
+                'layers1': randint(1, 2),
+                'layers2': randint(0, 2),
+                'nb_epoch': randint(10, 100),
+                'batch_size': randint(10, 100),
+                'kernel_initializer': choice(['he_uniform', 'glorot_uniform']),
+                'shifting': randint(0, 1),
+                'scaling': randint(0, 1)
+
+            }
             pass
+
+        else:
+            print('No valid specified!')
+            raise KeyError
+
+
 
     def __calc_score(self, y_pred, y, params):
         '''
@@ -145,7 +167,7 @@ class random_search:
 
         return score.flatten(), idx, y_pred, y
 
-    def fit_predict(self, model, data, y_all, axis):
+    def fit_predict(self, model_name, data, y_all, axis):
         '''
         :param data:
         :param y:
@@ -159,7 +181,7 @@ class random_search:
             print(f'Iteration: {n_i + 1}')
 
             # build model
-            rf, params = self.__build_model(model)
+            model, params = self.__build_model(model_name)
 
             # params as scipy object: and rest
             params['shifting'] = randint(0, 1)
@@ -192,8 +214,10 @@ class random_search:
                 params['scaler_y_m'] = scaler_y_m
 
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=1)
-            rf.fit(X_train, y_train.ravel())
-            y_pred = rf.predict(X)
+
+
+            model.fit(X_train, y_train.ravel())
+            y_pred = model.predict(X)
 
             score, idx, y_pred, y = self.__calc_score(np.asarray(y_pred).reshape(-1, 1), np.asarray(y).reshape(-1, 1),
                                                       params)
@@ -246,7 +270,7 @@ def main():
 
     # output
     # 'X', 'Y', 'Z'
-    axis = 'Z'
+    axis = 'X'
     data[f'{axis}1_FR_lp'] = data[f'{axis}1_FM_lp'] - data[f'{axis}1_FB_dir_lp']
     y = data[f'{axis}1_FR_lp']
     data = data.drop([f'{axis}1_FR_lp'], axis=1)
@@ -257,7 +281,7 @@ def main():
     b, a = butter(order, Wn=0.1, btype='lowpass')
     y_butter = filtfilt(b, a, y, axis=0)
 
-    n_iter = 70
+    n_iter = 150
     # XGBoost, RandomForrest
     model = 'XGBoost'
     # start random search:
