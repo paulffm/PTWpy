@@ -12,7 +12,7 @@ from sklearn.ensemble import RandomForestRegressor
 import xgboost as xgb
 
 
-def plot_pred(y_pred, y_butter, y, idx, axis):
+def plot_pred(data, y_pred, y_butter, y, idx, axis):
     '''
     :param y_pred:
     :param y_butter:
@@ -21,28 +21,64 @@ def plot_pred(y_pred, y_butter, y, idx, axis):
     :return:
     '''
     # idx for max diff in plot
-    y_diff_idx = (y.iloc[idx]).index
+    y_diff = (y.iloc[idx])
+    y_diff_v = y_diff[f'{axis}1_v_dir_lp']
+    y_diff_a = y_diff[f'{axis}1_a_dir_lp']
+    y_diff_idx = y_diff.index
     y_mostd = y_butter[idx]
 
     # plot of 'normal' current, filtered current, predicted current and all points with diff > 0.1
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=y.index, y=y,
-                             name=f'{axis}1_FR_lp'))
-    fig.add_trace(go.Scatter(x=y.index, y=y_pred.flatten(),
-                             name=f'{axis}1_FR_lp pred'))
-    fig.add_trace(go.Scatter(x=y.index, y=y_butter.flatten(),
-                             name=f'{axis}1_FR_lp filtered'))
-    fig.add_trace(go.Scatter(x=y_diff_idx, y=y_mostd.flatten(),
-                             name=f'most difference', mode='markers',
-                             marker=dict(size=10)))
+    # f'{axis}1_v_dir_lp', f'{axis}1_a_dir_lp'
+    fig_v = go.Figure()
+    fig_v.add_trace(go.Scatter(x=data[f'{axis}1_v_dir_lp'].values(), y=y,
+                               name=f'{axis}1_FR_lp'))
+    fig_v.add_trace(go.Scatter(x=data[f'{axis}1_v_dir_lp'].values(), y=y_pred.flatten(),
+                               name=f'{axis}1_FR_lp pred'))
+    fig_v.add_trace(go.Scatter(x=data[f'{axis}1_v_dir_lp'].values(), y=y_butter.flatten(),
+                               name=f'{axis}1_FR_lp filtered'))
+    fig_v.add_trace(go.Scatter(x=y_diff_v.values(), y=y_mostd.flatten(),
+                               name=f'most difference', mode='markers',
+                               marker=dict(size=10)))
+    fig_v.update_layout(
+        title=f'{axis}1_FR_lp over time',
+        yaxis_title=f'{axis}1_FR_lp',
+        xaxis_title=f'{axis}1_v_dir_lp',
+        font=dict(family="Tahoma", size=18, color="Black"))
+    fig_v.show()
 
-    fig.update_layout(
+    fig_a = go.Figure()
+    fig_a.add_trace(go.Scatter(x=data[f'{axis}1_a_dir_lp'].values(), y=y,
+                               name=f'{axis}1_FR_lp'))
+    fig_a.add_trace(go.Scatter(x=data[f'{axis}1_a_dir_lp'].values(), y=y_pred.flatten(),
+                               name=f'{axis}1_FR_lp pred'))
+    fig_a.add_trace(go.Scatter(x=data[f'{axis}1_a_dir_lp'].values(), y=y_butter.flatten(),
+                               name=f'{axis}1_FR_lp filtered'))
+    fig_a.add_trace(go.Scatter(x=y_diff_v.values(), y=y_mostd.flatten(),
+                               name=f'most difference', mode='markers',
+                               marker=dict(size=10)))
+    fig_a.update_layout(
+        title=f'{axis}1_FR_lp over time',
+        yaxis_title=f'{axis}1_FR_lp',
+        xaxis_title=f'{axis}1_a_dir_lp',
+        font=dict(family="Tahoma", size=18, color="Black"))
+    fig_a.show()
+
+    fig_t = go.Figure()
+    fig_t.add_trace(go.Scatter(x=y.index, y=y,
+                               name=f'{axis}1_FR_lp'))
+    fig_t.add_trace(go.Scatter(x=y.index, y=y_pred.flatten(),
+                               name=f'{axis}1_FR_lp pred'))
+    fig_t.add_trace(go.Scatter(x=y.index, y=y_butter.flatten(),
+                               name=f'{axis}1_FR_lp filtered'))
+    fig_t.add_trace(go.Scatter(x=y_diff_idx, y=y_mostd.flatten(),
+                               name=f'most difference', mode='markers',
+                               marker=dict(size=10)))
+    fig_t.update_layout(
         title=f'{axis}1_FR_lp over time',
         yaxis_title=f'{axis}1_FR_lp',
         xaxis_title=f'time',
         font=dict(family="Tahoma", size=18, color="Black"))
-    fig.show()
-
+    fig_t.show()
 
 def scaling_method(method):
     if method == 'MinMax(-1.1)':
@@ -87,10 +123,12 @@ def data_shift(X, window, forw):
 
 
 class random_search:
-    def __init__(self, n_iter):
+    def __init__(self, n_iter, axis):
         self.n_iter = n_iter
         self.best_params = dict()
         self.best_score = 1e9
+        self.axis = axis
+
 
 
     def __build_model(self, model):
@@ -103,38 +141,17 @@ class random_search:
         elif model == 'XGBoost':
 
             params = {'max_depth': randint(3, 20),
-                           'learning_rate': choice([0.01, 0.025, 0.05, 0.07, 0.1, 0.15]),
-                           'subsample': choice([0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]),
-                           'colsample_bytree': choice([0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]),
-                           'colsample_bylevel': choice([0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1])}
+                           'learning_rate': choice([0.01, 0.025, 0.03, 0.035, 0.04, 0.05, 0.06, 0.07]),
+                           'subsample': choice([0.3, 0.4, 0.5, 0.6, 0.7]),
+                           'colsample_bytree': choice([0.3, 0.4, 0.5, 0.6]),
+                           'colsample_bylevel': choice([0.3, 0.5, 0.6, 0.7, 0.9, 1])}
 
             rf = xgb.XGBRegressor(learning_rate=params['learning_rate'], subsample=params['subsample'],
                                   colsample_bytree=params['colsample_bytree'],
                                   colsample_bylevel=params['colsample_bylevel'])
             return rf, params
-
-        elif model == 'NN':
-            params = {
-                'unit1': randint(50, 250),
-                'unit2': randint(50, 250),
-                'unit3': randint(50, 2500),
-                'activation': choice(['relu', 'sigmoid', 'tanh', 'elu']),
-                'learning_rate': choice([0.001, 0.0015, 0.002, 0.003, 0.007, 0.01, 0.015, 0.02, 0.03, 0.1]),
-                'layers1': randint(1, 2),
-                'layers2': randint(0, 2),
-                'nb_epoch': randint(10, 100),
-                'batch_size': randint(10, 100),
-                'kernel_initializer': choice(['he_uniform', 'glorot_uniform']),
-                'shifting': randint(0, 1),
-                'scaling': randint(0, 1)
-
-            }
-            pass
-
         else:
-            print('No valid specified!')
-            raise KeyError
-
+            pass
 
 
     def __calc_score(self, y_pred, y, params):
@@ -167,7 +184,7 @@ class random_search:
 
         return score.flatten(), idx, y_pred, y
 
-    def fit_predict(self, model_name, data, y_all, axis):
+    def fit_predict(self, model, data, y_all):
         '''
         :param data:
         :param y:
@@ -181,13 +198,13 @@ class random_search:
             print(f'Iteration: {n_i + 1}')
 
             # build model
-            model, params = self.__build_model(model_name)
+            rf, params = self.__build_model(model)
 
             # params as scipy object: and rest
             params['shifting'] = randint(0, 1)
             params['scaling'] = randint(0, 1)
 
-            inp = [f'{axis}1_v_dir_lp', f'{axis}1_a_dir_lp']
+            inp = [f'{self.axis}1_v_dir_lp', f'{self.axis}1_a_dir_lp']
             # inp.append(params['inputs'])
             X = data[inp]
 
@@ -214,10 +231,8 @@ class random_search:
                 params['scaler_y_m'] = scaler_y_m
 
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=1)
-
-
-            model.fit(X_train, y_train.ravel())
-            y_pred = model.predict(X)
+            rf.fit(X_train, y_train.ravel())
+            y_pred = rf.predict(X)
 
             score, idx, y_pred, y = self.__calc_score(np.asarray(y_pred).reshape(-1, 1), np.asarray(y).reshape(-1, 1),
                                                       params)
@@ -228,11 +243,13 @@ class random_search:
                 best_ypred = y_pred
                 best_idx = idx
                 print('Best Params:', self.best_params)
-            # print('best y_pred', best_ypred)
-            # print('y', y)
+
             print(f'Score: {score}; Best Score: {self.best_score}')
 
         return best_ypred, best_idx
+
+
+
 
 
 def main():
@@ -252,7 +269,7 @@ def main():
     # data: filtering better
     file = '2023-01-16T1253_MRM_DMC850_20220509_Filter.csv'
     data = pd.read_csv(file, sep=',', header=0, index_col=0, parse_dates=True, decimal=".")
-    # print('header', data.columns.values.tolist())
+    print('header', data.columns.values.tolist())
     # print(data)
     data['DateTime'] = pd.to_datetime(data["time_"])
     data['Date'] = data['DateTime'].dt.strftime('%Y-%m-%d')
@@ -281,17 +298,17 @@ def main():
     b, a = butter(order, Wn=0.1, btype='lowpass')
     y_butter = filtfilt(b, a, y, axis=0)
 
-    n_iter = 150
+    n_iter = 1
     # XGBoost, RandomForrest
     model = 'XGBoost'
     # start random search:
-    search_rg = random_search(n_iter)
-    y_pred, idx = search_rg.fit_predict(model, data, y_butter, axis)
+    search_rg = random_search(n_iter, axis)
+    y_pred, idx = search_rg.fit_predict(model, data, y_butter)
     print('Best params', search_rg.best_params)
     print('Best score', search_rg.best_score)
 
     # plot score
-    plot_pred(y_pred, y_butter, y, idx, axis)
+    plot_pred(data, y_pred, y_butter, y, idx)
 
 
 if __name__ == '__main__':
@@ -302,9 +319,12 @@ Score: [474.39711064]; Best Score: [474.39711064]'''
 
 # XGB:
 # X1
-'''Best Params: {'shifting': 1, 'scaling': 1, 'step_size': 4, 'forward': 0, 'scaling_method': 'Standard', 'scaler_y_r': RobustScaler(), 'scaler_y_m': StandardScaler()}\nScore: [474.39711064]; Best Score: [474.39711064]"'''
-'''Best params {'shifting': 1, 'scaling': 1, 'step_size': 9, 'forward': 0, 'scaling_method': 'MinMax(-1.1)', 'scaler_y_r': RobustScaler(), 'scaler_y_m': MinMaxScaler(feature_range=(-1, 1))}
-Best score [470.62793066]'''
+'''
+Number of points with difference > 200: 5379
+Best Params: {'shifting': 1, 'scaling': 0, 'step_size': 16, 'forward': 1}
+Score: [263.54339314]; Best Score: [263.54339314]'''
+'''Best params {'max_depth': 16, 'learning_rate': 0.025, 'subsample': 0.5, 'colsample_bytree': 0.4, 'colsample_bylevel': 1, 'shifting': 1, 'scaling': 1, 'step_size': 9, 'forward': 1, 'scaling_method': 'MinMax(-1.1)', 'scaler_y_r': RobustScaler(), 'scaler_y_m': MinMaxScaler(feature_range=(-1, 1))}
+Best score [407.490167]'''
 # Y1
 '''Number of points with difference > 200: 237
 Best Params: {'shifting': 1, 'scaling': 0, 'step_size': 17, 'forward': 1}
