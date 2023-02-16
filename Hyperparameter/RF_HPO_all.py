@@ -21,47 +21,48 @@ def plot_pred(data, y_pred, y_butter, y, idx, axis):
     :return:
     '''
     # idx for max diff in plot
-    y_diff = (y.iloc[idx])
-    y_diff_v = y_diff[f'{axis}1_v_dir_lp']
-    y_diff_a = y_diff[f'{axis}1_a_dir_lp']
-    y_diff_idx = y_diff.index
+    X_diff = (data.iloc[idx])
+    X_diff_v = X_diff[f'{axis}1_v_dir_lp']
+    X_diff_a = X_diff[f'{axis}1_a_dir_lp']
+    y_diff_idx = X_diff.index
     y_mostd = y_butter[idx]
 
     # plot of 'normal' current, filtered current, predicted current and all points with diff > 0.1
     # f'{axis}1_v_dir_lp', f'{axis}1_a_dir_lp'
     fig_v = go.Figure()
-    fig_v.add_trace(go.Scatter(x=data[f'{axis}1_v_dir_lp'].values(), y=y,
+    fig_v.add_trace(go.Scatter(x=data[f'{axis}1_v_dir_lp'], y=y,
                                name=f'{axis}1_FR_lp'))
-    fig_v.add_trace(go.Scatter(x=data[f'{axis}1_v_dir_lp'].values(), y=y_pred.flatten(),
+    fig_v.add_trace(go.Scatter(x=data[f'{axis}1_v_dir_lp'], y=y_pred.flatten(),
                                name=f'{axis}1_FR_lp pred'))
-    fig_v.add_trace(go.Scatter(x=data[f'{axis}1_v_dir_lp'].values(), y=y_butter.flatten(),
+    fig_v.add_trace(go.Scatter(x=data[f'{axis}1_v_dir_lp'], y=y_butter.flatten(),
                                name=f'{axis}1_FR_lp filtered'))
-    fig_v.add_trace(go.Scatter(x=y_diff_v.values(), y=y_mostd.flatten(),
+    fig_v.add_trace(go.Scatter(x=X_diff_v, y=y_mostd.flatten(),
                                name=f'most difference', mode='markers',
                                marker=dict(size=10)))
     fig_v.update_layout(
-        title=f'{axis}1_FR_lp over time',
+        title=f'{axis}1_FR_lp over v',
         yaxis_title=f'{axis}1_FR_lp',
         xaxis_title=f'{axis}1_v_dir_lp',
         font=dict(family="Tahoma", size=18, color="Black"))
     fig_v.show()
 
     fig_a = go.Figure()
-    fig_a.add_trace(go.Scatter(x=data[f'{axis}1_a_dir_lp'].values(), y=y,
+    fig_a.add_trace(go.Scatter(x=data[f'{axis}1_a_dir_lp'], y=y,
                                name=f'{axis}1_FR_lp'))
-    fig_a.add_trace(go.Scatter(x=data[f'{axis}1_a_dir_lp'].values(), y=y_pred.flatten(),
+    fig_a.add_trace(go.Scatter(x=data[f'{axis}1_a_dir_lp'], y=y_pred.flatten(),
                                name=f'{axis}1_FR_lp pred'))
-    fig_a.add_trace(go.Scatter(x=data[f'{axis}1_a_dir_lp'].values(), y=y_butter.flatten(),
+    fig_a.add_trace(go.Scatter(x=data[f'{axis}1_a_dir_lp'], y=y_butter.flatten(),
                                name=f'{axis}1_FR_lp filtered'))
-    fig_a.add_trace(go.Scatter(x=y_diff_v.values(), y=y_mostd.flatten(),
+    fig_a.add_trace(go.Scatter(x=X_diff_a, y=y_mostd.flatten(),
                                name=f'most difference', mode='markers',
                                marker=dict(size=10)))
     fig_a.update_layout(
-        title=f'{axis}1_FR_lp over time',
+        title=f'{axis}1_FR_lp over a',
         yaxis_title=f'{axis}1_FR_lp',
         xaxis_title=f'{axis}1_a_dir_lp',
         font=dict(family="Tahoma", size=18, color="Black"))
     fig_a.show()
+
 
     fig_t = go.Figure()
     fig_t.add_trace(go.Scatter(x=y.index, y=y,
@@ -267,7 +268,7 @@ def main():
     blockVar = "/Channel/ProgramInfo/block|u1.2"
 
     # data: filtering better
-    file = '2023-01-16T1253_MRM_DMC850_20220509_Filter.csv'
+    file = '/Users/paulheller/Desktop/PTW_Data/KohnData/2023-01-16T1253_MRM_DMC850_20220509_Filter.csv'
     data = pd.read_csv(file, sep=',', header=0, index_col=0, parse_dates=True, decimal=".")
     print('header', data.columns.values.tolist())
     # print(data)
@@ -298,7 +299,14 @@ def main():
     b, a = butter(order, Wn=0.1, btype='lowpass')
     y_butter = filtfilt(b, a, y, axis=0)
 
-    n_iter = 1
+    # plot score
+    y_pred = np.loadtxt(f'/Users/paulheller/Desktop/PTW_Data/KohnData/X/y_pred_{axis}.csv', delimiter=',')
+    idx = np.loadtxt(f'/Users/paulheller/Desktop/PTW_Data/KohnData/X/idx_{axis}.csv', delimiter=',').astype(int)
+    print(idx, idx.shape)
+    print(y_pred, y_pred.shape)
+    plot_pred(data, y_pred, y_butter, y, idx, axis)
+
+    '''n_iter = 1
     # XGBoost, RandomForrest
     model = 'XGBoost'
     # start random search:
@@ -308,7 +316,7 @@ def main():
     print('Best score', search_rg.best_score)
 
     # plot score
-    plot_pred(data, y_pred, y_butter, y, idx)
+    plot_pred(data, y_pred, y_butter, y, idx, axis)'''
 
 
 if __name__ == '__main__':
@@ -324,7 +332,7 @@ Number of points with difference > 200: 5379
 Best Params: {'shifting': 1, 'scaling': 0, 'step_size': 16, 'forward': 1}
 Score: [263.54339314]; Best Score: [263.54339314]'''
 '''Best params {'max_depth': 16, 'learning_rate': 0.025, 'subsample': 0.5, 'colsample_bytree': 0.4, 'colsample_bylevel': 1, 'shifting': 1, 'scaling': 1, 'step_size': 9, 'forward': 1, 'scaling_method': 'MinMax(-1.1)', 'scaler_y_r': RobustScaler(), 'scaler_y_m': MinMaxScaler(feature_range=(-1, 1))}
-Best score [407.490167]'''
+Best score [400.490167]'''
 # Y1
 '''Number of points with difference > 200: 237
 Best Params: {'shifting': 1, 'scaling': 0, 'step_size': 17, 'forward': 1}
