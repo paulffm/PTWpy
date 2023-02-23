@@ -11,6 +11,7 @@ from scipy.signal import butter, cheby1, filtfilt
 from sklearn.ensemble import RandomForestRegressor
 import xgboost as xgb
 
+
 #### settings ###
 # Changes: numerical binning
 
@@ -61,7 +62,6 @@ def plot_pred(data, y_pred, y, idx, axis):
         font=dict(family="Tahoma", size=18, color="Black"))
     fig_a.show()
 
-
     fig_t = go.Figure()
     fig_t.add_trace(go.Scatter(x=y.index, y=y,
                                name=f'{axis}1_FR_lp'))
@@ -76,6 +76,7 @@ def plot_pred(data, y_pred, y, idx, axis):
         xaxis_title=f'time',
         font=dict(family="Tahoma", size=18, color="Black"))
     fig_t.show()
+
 
 def scaling_method(method):
     if method == 'MinMax(-1.1)':
@@ -96,11 +97,10 @@ def scaling_method(method):
     return scaler_x, scaler_y
 
 
-def data_shift(X, window, forw, inp=0):
-
+def data_shift(X, window, forw, inp='Null'):
     # each look back/forward as another feature
     # falls kein input_namen gegeben, die geshiftet werden sollen => shifte alles
-    if inp == 0:
+    if inp == 'Null':
         inp = X.columns.values.tolist()
 
     X_plc = X
@@ -130,8 +130,6 @@ class random_search:
         self.best_score = 1e9
         self.axis = axis
 
-
-
     def __build_model(self, model):
         '''
         :param model:
@@ -142,10 +140,10 @@ class random_search:
         elif model == 'XGBoost':
 
             params = {'max_depth': randint(3, 20),
-                           'learning_rate': choice([0.025, 0.0275, 0.03, 0.035, 0.04, 0.05]),
-                           'subsample': choice([0.3, 0.4, 0.5, 0.6, 0.7]),
-                           'colsample_bytree': choice([0.3, 0.4, 0.5, 0.6]),
-                           'colsample_bylevel': choice([0.3, 0.5, 0.6, 0.7, 0.9, 1])}
+                      'learning_rate': choice([0.025, 0.0275, 0.03, 0.035, 0.04, 0.05]),
+                      'subsample': choice([0.3, 0.4, 0.5, 0.6, 0.7]),
+                      'colsample_bytree': choice([0.3, 0.4, 0.5, 0.6]),
+                      'colsample_bylevel': choice([0.3, 0.5, 0.6, 0.7, 0.9, 1])}
 
             rf = xgb.XGBRegressor(learning_rate=params['learning_rate'], subsample=params['subsample'],
                                   colsample_bytree=params['colsample_bytree'],
@@ -153,7 +151,6 @@ class random_search:
             return rf, params
         else:
             pass
-
 
     def __calc_score(self, y_pred, y, params):
         '''
@@ -166,10 +163,10 @@ class random_search:
         # inverse transformation
         if params['scaling'] == 1:
             y = params['scaler_y_m'].inverse_transform(y)
-            #y = params['scaler_y_r'].inverse_transform(y)
+            # y = params['scaler_y_r'].inverse_transform(y)
 
             y_pred = params['scaler_y_m'].inverse_transform(np.asarray(y_pred).reshape(-1, 1))
-            #y_pred = params['scaler_y_r'].inverse_transform(y_pred)
+            # y_pred = params['scaler_y_r'].inverse_transform(y_pred)
 
         # max error
         y_diff = np.abs((y) - (y_pred.reshape(-1, 1)))
@@ -195,27 +192,29 @@ class random_search:
         best_ypred = []
         best_idx = []
         for n_i in range(self.n_iter):
+
+            # otheriwse bug with scaling
             y = y_all
             print(f'Iteration: {n_i + 1}')
 
-            # build model
+            # build model (better would be a method that I import)
             rf, params = self.__build_model(model)
 
-            # params as scipy object: and rest
+            # To DO:params as scipy object: and rest
             params['shifting'] = randint(0, 1)
-            params['scaling'] = 0 #randint(0, 1)
+            params['scaling'] = 0  # randint(0, 1)
 
-            inp = [f'{self.axis}1_v_dir_lp', f'{self.axis}1_a_dir_lp']
+            inp_shift = [f'{self.axis}1_v_dir_lp', f'{self.axis}1_a_dir_lp']
             # inp.append(params['inputs'])
-            X = data[inp]
+            # X = data[inp]
+            X = data
 
             if params['shifting'] == 1:
                 window = randint(1, 20)
                 params['step_size'] = window
                 forw = randint(0, 1)
                 params['forward'] = forw
-                X = data_shift(X, window, forw, inp)
-
+                X = data_shift(X, window, forw, inp_shift)
 
             if params['scaling'] == 1:
                 method = choice(['Standard', 'MinMax', 'MinMax(-1.1)'])
@@ -266,7 +265,7 @@ def main():
     blockVar = "/Channel/ProgramInfo/block|u1.2"
 
     # data: filtering better
-    #/Users/paulheller/Desktop/PTW_Data/KohnData/
+    # /Users/paulheller/Desktop/PTW_Data/KohnData/
     file = '2023-01-16T1253_MRM_DMC850_20220509_Filter.csv'
     data = pd.read_csv(file, sep=',', header=0, index_col=0, parse_dates=True, decimal=".")
     print('header', data.columns.values.tolist())
@@ -288,27 +287,28 @@ def main():
     # output
     # 'X', 'Y', 'Z'
     axis = 'X'
-    data[f'{axis}1_FR_lp'] = data[f'{axis}1_FM_lp'] - data[f'{axis}1_FB_dir_lp']
-    y = data[f'{axis}1_FR_lp']
-    data = data.drop([f'{axis}1_FR_lp'], axis=1)
-
-    # insert binning
+    # insert binning: muss es hier machen und schon die inputs rausschneiden, da ich sonst inkonsistent bekomme mit der Länge des DF
+    data = data[[f'{axis}1_v_dir_lp', f'{axis}1_a_dir_lp', f'{axis}1_FM_lp', f'{axis}1_FB_dir_lp']]
     data['BinV'] = pd.qcut(data[f'{axis}1_v_dir_lp'], 4, labels=False)
     data['BinA'] = pd.qcut(data[f'{axis}1_a_dir_lp'], 4, labels=False)
     data['MeanV'] = data[f'{axis}1_v_dir_lp'].rolling(5).mean()
     data['MeanA'] = data[f'{axis}1_a_dir_lp'].rolling(5).mean()
     data['StdV'] = data[f'{axis}1_v_dir_lp'].rolling(5).mean()
     data['StdA'] = data[f'{axis}1_a_dir_lp'].rolling(5).mean()
-    data = data.dropna()
+    data[f'{axis}1_FR_lp'] = data[f'{axis}1_FM_lp'] - data[f'{axis}1_FB_dir_lp']
     print(data)
-
+    data = data.dropna()
+    y = data[f'{axis}1_FR_lp']
+    data = data.drop([f'{axis}1_FR_lp', f'{axis}1_FB_dir_lp', f'{axis}1_FM_lp'], axis=1)
+    print(data)
+    print(y)
 
     # plot score
-    #y_pred = np.loadtxt(f'/Users/paulheller/Desktop/PTW_Data/KohnData/X/y_pred_{axis}.csv', delimiter=',')
-    #idx = np.loadtxt(f'/Users/paulheller/Desktop/PTW_Data/KohnData/X/idx_{axis}.csv', delimiter=',').astype(int)
-    #print(idx, idx.shape)
-    #print(y_pred, y_pred.shape)
-    #plot_pred(data, y_pred, y_butter, y, idx, axis)
+    # y_pred = np.loadtxt(f'/Users/paulheller/Desktop/PTW_Data/KohnData/X/y_pred_{axis}.csv', delimiter=',')
+    # idx = np.loadtxt(f'/Users/paulheller/Desktop/PTW_Data/KohnData/X/idx_{axis}.csv', delimiter=',').astype(int)
+    # print(idx, idx.shape)
+    # print(y_pred, y_pred.shape)
+    # plot_pred(data, y_pred, y_butter, y, idx, axis)
 
     n_iter = 1
     # XGBoost,RandomForrest
@@ -322,30 +322,29 @@ def main():
     # plot score
     plot_pred(data, y_pred, y, idx, axis)
 
+    if __name__ == '__main__':
+        main()
+    # RF after 21 iterations
+    '''Best Params: {'shifting': 1, 'scaling': 1, 'step_size': 4, 'forward': 0, 'scaling_method': 'Standard', 'scaler_y_r': RobustScaler(), 'scaler_y_m': StandardScaler()}
+    Score: [474.39711064]; Best Score: [474.39711064]'''
 
-if __name__ == '__main__':
-    main()
-# RF after 21 iterations
-'''Best Params: {'shifting': 1, 'scaling': 1, 'step_size': 4, 'forward': 0, 'scaling_method': 'Standard', 'scaler_y_r': RobustScaler(), 'scaler_y_m': StandardScaler()}
-Score: [474.39711064]; Best Score: [474.39711064]'''
-
-# XGB:
-# X1
-'''
-Number of points with difference > 200: 5379
-Best Params: {'shifting': 1, 'scaling': 0, 'step_size': 16, 'forward': 1}
-Score: [263.54339314]; Best Score: [263.54339314]'''
-'''Best params {'max_depth': 16, 'learning_rate': 0.025, 'subsample': 0.5, 'colsample_bytree': 0.4, 'colsample_bylevel': 1, 'shifting': 1, 'scaling': 1, 'step_size': 9, 'forward': 1, 'scaling_method': 'MinMax(-1.1)', 'scaler_y_r': RobustScaler(), 'scaler_y_m': MinMaxScaler(feature_range=(-1, 1))}
-Best score [400.490167]'''
-
-'''Number of points with difference > 200: 668
-Best Params: {'max_depth': 17, 'learning_rate': 0.03, 'subsample': 0.4, 'colsample_bytree': 0.4, 'colsample_bylevel': 0.6, 'shifting': 1, 'scaling': 1, 'step_size': 20, 'forward': 0, 'scaling_method': 'MinMax(-1.1)', 'scaler_y_r': RobustScaler(), 'scaler_y_m': MinMaxScaler(feature_range=(-1, 1))}
-Score: [427.7763533]; Best Score: [427.7763533]'''
-# Y1
-'''Number of points with difference > 200: 237
-Best Params: {'shifting': 1, 'scaling': 0, 'step_size': 17, 'forward': 1}
-Score: [250.26284924]; Best Score: [250.26284924]'''
-# Z1
-'''Number of points with difference > 200: 912
-Best Params: {'shifting': 1, 'scaling': 0, 'step_size': 16, 'forward': 1}
-Score: [263.54339314]; Best Score: [263.54339314]'''
+    # XGB:
+    # X1
+    '''
+    Number of points with difference > 200: 5379
+    Best Params: {'shifting': 1, 'scaling': 0, 'step_size': 16, 'forward': 1}
+    Score: [263.54339314]; Best Score: [263.54339314]''' \
+    '''Best params {'max_depth': 16, 'learning_rate': 0.025, 'subsample': 0.5, 'colsample_bytree': 0.4, 'colsample_bylevel': 1, 'shifting': 1, 'scaling': 1, 'step_size': 9, 'forward': 1, 'scaling_method': 'MinMax(-1.1)', 'scaler_y_r': RobustScaler(), 'scaler_y_m': MinMaxScaler(feature_range=(-1, 1))}
+    Best score [400.490167]''' \
+ \
+    '''Number of points with difference > 200: 668
+    Best Params: {'max_depth': 17, 'learning_rate': 0.03, 'subsample': 0.4, 'colsample_bytree': 0.4, 'colsample_bylevel': 0.6, 'shifting': 1, 'scaling': 1, 'step_size': 20, 'forward': 0, 'scaling_method': 'MinMax(-1.1)', 'scaler_y_r': RobustScaler(), 'scaler_y_m': MinMaxScaler(feature_range=(-1, 1))}
+    Score: [427.7763533]; Best Score: [427.7763533]'''
+    # Y1
+    '''Number of points with difference > 200: 237
+    Best Params: {'shifting': 1, 'scaling': 0, 'step_size': 17, 'forward': 1}
+    Score: [250.26284924]; Best Score: [250.26284924]'''
+    # Z1
+    '''Number of points with difference > 200: 912
+    Best Params: {'shifting': 1, 'scaling': 0, 'step_size': 16, 'forward': 1}
+    Score: [263.54339314]; Best Score: [263.54339314]'''
