@@ -96,14 +96,18 @@ def scaling_method(method):
     return scaler_x, scaler_y
 
 
-def data_shift(X, window, forw):
+def data_shift(X, window, forw, inp=0):
+
     # each look back/forward as another feature
-    inp = X.columns.values.tolist()
+    # falls kein input_namen gegeben, die geshiftet werden sollen => shifte alles
+    if inp == 0:
+        inp = X.columns.values.tolist()
+
     X_plc = X
     if forw == 1:
         for i in range(window):
-            X_shift_bw = X.shift(periods=(i + 1), fill_value=0)
-            X_shift_fw = X.shift(periods=-(i + 1), fill_value=0)
+            X_shift_bw = X[inp].shift(periods=(i + 1), fill_value=0)
+            X_shift_fw = X[inp].shift(periods=-(i + 1), fill_value=0)
             inp_bw = [x + f'_-{i + 1}' for x in inp]
             inp_fw = [x + f'_+{i + 1}' for x in inp]
             X_shift_bw.columns = inp_bw
@@ -111,7 +115,7 @@ def data_shift(X, window, forw):
             X_plc = pd.concat([X_plc, X_shift_bw, X_shift_fw], axis=1)
     else:
         for i in range(window):
-            X_shift_bw = X.shift(periods=(i + 1), fill_value=0)
+            X_shift_bw = X[inp].shift(periods=(i + 1), fill_value=0)
             inp_bw = [x + f'_-{i + 1}' for x in inp]
             X_shift_bw.columns = inp_bw
             X_plc = pd.concat([X_plc, X_shift_bw], axis=1)
@@ -210,16 +214,8 @@ class random_search:
                 params['step_size'] = window
                 forw = randint(0, 1)
                 params['forward'] = forw
-                X = data_shift(X, window, forw)
+                X = data_shift(X, window, forw, inp)
 
-
-            # insert binning
-            data['BinV'] = pd.qcut(data[f'{self.axis}1_v_dir_lp'], 4, labels=False)
-            data['BinA'] = pd.qcut(data[f'{self.axis}1_a_dir_lp'], 4, labels=False)
-            data['MeanV'] = data[f'{self.axis}1_v_dir_lp'].rolling(5).mean()
-            data['MeanA'] = data[f'{self.axis}1_a_dir_lp'].rolling(5).mean()
-            data['StdV'] = data[f'{self.axis}1_v_dir_lp'].rolling(5).mean()
-            data['StdA'] = data[f'{self.axis}1_a_dir_lp'].rolling(5).mean()
 
             if params['scaling'] == 1:
                 method = choice(['Standard', 'MinMax', 'MinMax(-1.1)'])
@@ -270,7 +266,8 @@ def main():
     blockVar = "/Channel/ProgramInfo/block|u1.2"
 
     # data: filtering better
-    file = '/Users/paulheller/Desktop/PTW_Data/KohnData/2023-01-16T1253_MRM_DMC850_20220509_Filter.csv'
+    #/Users/paulheller/Desktop/PTW_Data/KohnData/
+    file = '2023-01-16T1253_MRM_DMC850_20220509_Filter.csv'
     data = pd.read_csv(file, sep=',', header=0, index_col=0, parse_dates=True, decimal=".")
     print('header', data.columns.values.tolist())
     # print(data)
@@ -294,6 +291,15 @@ def main():
     data[f'{axis}1_FR_lp'] = data[f'{axis}1_FM_lp'] - data[f'{axis}1_FB_dir_lp']
     y = data[f'{axis}1_FR_lp']
     data = data.drop([f'{axis}1_FR_lp'], axis=1)
+
+    # insert binning
+    data['BinV'] = pd.qcut(data[f'{axis}1_v_dir_lp'], 4, labels=False)
+    data['BinA'] = pd.qcut(data[f'{axis}1_a_dir_lp'], 4, labels=False)
+    data['MeanV'] = data[f'{axis}1_v_dir_lp'].rolling(5).mean()
+    data['MeanA'] = data[f'{axis}1_a_dir_lp'].rolling(5).mean()
+    data['StdV'] = data[f'{axis}1_v_dir_lp'].rolling(5).mean()
+    data['StdA'] = data[f'{axis}1_a_dir_lp'].rolling(5).mean()
+    data = data.dropna()
     print(data)
 
 
@@ -304,8 +310,8 @@ def main():
     #print(y_pred, y_pred.shape)
     #plot_pred(data, y_pred, y_butter, y, idx, axis)
 
-    n_iter = 30
-    # XGBoost, RandomForrest
+    n_iter = 1
+    # XGBoost,RandomForrest
     model = 'XGBoost'
     # start random search:
     search_rg = random_search(n_iter, axis)
