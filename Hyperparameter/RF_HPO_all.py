@@ -140,10 +140,10 @@ class random_search:
         elif model == 'XGBoost':
 
             params = {'max_depth': randint(3, 20),
-                      'learning_rate': choice([0.025, 0.0275, 0.03, 0.035, 0.04, 0.05]),
+                      'learning_rate': choice([0.025, 0.03, 0.035, 0.04, 0.050, 0.055, 0.0575, 0.06]),
                       'subsample': choice([0.3, 0.4, 0.5, 0.6, 0.7]),
-                      'colsample_bytree': choice([0.3, 0.4, 0.5, 0.6]),
-                      'colsample_bylevel': choice([0.3, 0.5, 0.6, 0.7, 0.9, 1])}
+                      'colsample_bytree': choice([0.4, 0.5, 0.6, 0.7, 0.8]),
+                      'colsample_bylevel': choice([0.4, 0.5, 0.6, 0.7, 0.9, 1])}
 
             rf = xgb.XGBRegressor(learning_rate=params['learning_rate'], subsample=params['subsample'],
                                   colsample_bytree=params['colsample_bytree'],
@@ -201,7 +201,7 @@ class random_search:
             rf, params = self.__build_model(model)
 
             # To DO:params as scipy object: and rest
-            params['shifting'] = randint(0, 1)
+            params['shifting'] = 1  # randint(0, 1)
             params['scaling'] = 0  # randint(0, 1)
 
             inp_shift = [f'{self.axis}1_v_dir_lp', f'{self.axis}1_a_dir_lp']
@@ -210,7 +210,7 @@ class random_search:
             X = data
 
             if params['shifting'] == 1:
-                window = randint(1, 20)
+                window = randint(19, 40)
                 params['step_size'] = window
                 forw = randint(0, 1)
                 params['forward'] = forw
@@ -289,15 +289,22 @@ def main():
     axis = 'X'
     # insert binning: muss es hier machen und schon die inputs rausschneiden, da ich sonst inkonsistent bekomme mit der Länge des DF
     data = data[[f'{axis}1_v_dir_lp', f'{axis}1_a_dir_lp', f'{axis}1_FM_lp', f'{axis}1_FB_dir_lp']]
-    data['BinV'] = pd.qcut(data[f'{axis}1_v_dir_lp'], 4, labels=False)
-    data['BinA'] = pd.qcut(data[f'{axis}1_a_dir_lp'], 4, labels=False)
-    data['MeanV'] = data[f'{axis}1_v_dir_lp'].rolling(5).mean()
-    data['MeanA'] = data[f'{axis}1_a_dir_lp'].rolling(5).mean()
-    data['StdV'] = data[f'{axis}1_v_dir_lp'].rolling(5).mean()
-    data['StdA'] = data[f'{axis}1_a_dir_lp'].rolling(5).mean()
+    # data['BinV'] = pd.qcut(data[f'{axis}1_v_dir_lp'], 4, labels=False)
+    # data['BinA'] = pd.qcut(data[f'{axis}1_a_dir_lp'], 4, labels=False)
+    data['MeanV1'] = data[f'{axis}1_v_dir_lp'].rolling(5000).mean()
+    data['MeanA1'] = data[f'{axis}1_a_dir_lp'].rolling(5000).mean()
+    data['StdV1'] = data[f'{axis}1_v_dir_lp'].rolling(5000).mean()
+    data['StdA1'] = data[f'{axis}1_a_dir_lp'].rolling(5000).mean()
+    data['MeanV2'] = data[f'{axis}1_v_dir_lp'].rolling(2000).mean()
+    data['MeanA2'] = data[f'{axis}1_a_dir_lp'].rolling(2000).mean()
+    data['StdV2'] = data[f'{axis}1_v_dir_lp'].rolling(2000).mean()
+    data['StdA2'] = data[f'{axis}1_a_dir_lp'].rolling(2000).mean()
+    data['MeanV3'] = data[f'{axis}1_v_dir_lp'].rolling(512).mean()
+    data['MeanA3'] = data[f'{axis}1_a_dir_lp'].rolling(512).mean()
+    data['StdV3'] = data[f'{axis}1_v_dir_lp'].rolling(512).mean()
+    data['StdA3'] = data[f'{axis}1_a_dir_lp'].rolling(512).mean()
     data[f'{axis}1_FR_lp'] = data[f'{axis}1_FM_lp'] - data[f'{axis}1_FB_dir_lp']
-    print(data)
-    data = data.dropna()
+    data = data.fillna(method="ffill")
     y = data[f'{axis}1_FR_lp']
     data = data.drop([f'{axis}1_FR_lp', f'{axis}1_FB_dir_lp', f'{axis}1_FM_lp'], axis=1)
     print(data)
@@ -310,41 +317,49 @@ def main():
     # print(y_pred, y_pred.shape)
     # plot_pred(data, y_pred, y_butter, y, idx, axis)
 
-    n_iter = 1
+    n_iter = 150
     # XGBoost,RandomForrest
     model = 'XGBoost'
     # start random search:
     search_rg = random_search(n_iter, axis)
     y_pred, idx = search_rg.fit_predict(model, data, y)
+    np.savetxt(f'y_pred_XGB_{axis}.csv', y_pred, delimiter=',')
+    np.savetxt(f'idx_XGB_{axis}.csv', idx, delimiter=',')
     print('Best params', search_rg.best_params)
     print('Best score', search_rg.best_score)
 
     # plot score
     plot_pred(data, y_pred, y, idx, axis)
 
-    if __name__ == '__main__':
-        main()
-    # RF after 21 iterations
-    '''Best Params: {'shifting': 1, 'scaling': 1, 'step_size': 4, 'forward': 0, 'scaling_method': 'Standard', 'scaler_y_r': RobustScaler(), 'scaler_y_m': StandardScaler()}
-    Score: [474.39711064]; Best Score: [474.39711064]'''
 
-    # XGB:
-    # X1
-    '''
-    Number of points with difference > 200: 5379
-    Best Params: {'shifting': 1, 'scaling': 0, 'step_size': 16, 'forward': 1}
-    Score: [263.54339314]; Best Score: [263.54339314]''' \
-    '''Best params {'max_depth': 16, 'learning_rate': 0.025, 'subsample': 0.5, 'colsample_bytree': 0.4, 'colsample_bylevel': 1, 'shifting': 1, 'scaling': 1, 'step_size': 9, 'forward': 1, 'scaling_method': 'MinMax(-1.1)', 'scaler_y_r': RobustScaler(), 'scaler_y_m': MinMaxScaler(feature_range=(-1, 1))}
-    Best score [400.490167]''' \
- \
-    '''Number of points with difference > 200: 668
-    Best Params: {'max_depth': 17, 'learning_rate': 0.03, 'subsample': 0.4, 'colsample_bytree': 0.4, 'colsample_bylevel': 0.6, 'shifting': 1, 'scaling': 1, 'step_size': 20, 'forward': 0, 'scaling_method': 'MinMax(-1.1)', 'scaler_y_r': RobustScaler(), 'scaler_y_m': MinMaxScaler(feature_range=(-1, 1))}
-    Score: [427.7763533]; Best Score: [427.7763533]'''
-    # Y1
-    '''Number of points with difference > 200: 237
-    Best Params: {'shifting': 1, 'scaling': 0, 'step_size': 17, 'forward': 1}
-    Score: [250.26284924]; Best Score: [250.26284924]'''
-    # Z1
-    '''Number of points with difference > 200: 912
-    Best Params: {'shifting': 1, 'scaling': 0, 'step_size': 16, 'forward': 1}
-    Score: [263.54339314]; Best Score: [263.54339314]'''
+if __name__ == '__main__':
+    main()
+# RF after 21 iterations
+'''Best Params: {'shifting': 1, 'scaling': 1, 'step_size': 4, 'forward': 0, 'scaling_method': 'Standard', 'scaler_y_r': RobustScaler(), 'scaler_y_m': StandardScaler()}
+Score: [474.39711064]; Best Score: [474.39711064]'''
+
+# XGB:
+# X1
+'''
+Number of points with difference > 200: 5379
+Best Params: {'shifting': 1, 'scaling': 0, 'step_size': 16, 'forward': 1}
+Score: [263.54339314]; Best Score: [263.54339314]'''
+'''Best params {'max_depth': 16, 'learning_rate': 0.025, 'subsample': 0.5, 'colsample_bytree': 0.4, 'colsample_bylevel': 1, 'shifting': 1, 'scaling': 1, 'step_size': 9, 'forward': 1, 'scaling_method': 'MinMax(-1.1)', 'scaler_y_r': RobustScaler(), 'scaler_y_m': MinMaxScaler(feature_range=(-1, 1))}
+Best score [400.490167]'''
+
+'''Number of points with difference > 200: 668
+Best Params: {'max_depth': 17, 'learning_rate': 0.03, 'subsample': 0.4, 'colsample_bytree': 0.4, 'colsample_bylevel': 0.6, 'shifting': 1, 'scaling': 1, 'step_size': 20, 'forward': 0, 'scaling_method': 'MinMax(-1.1)', 'scaler_y_r': RobustScaler(), 'scaler_y_m': MinMaxScaler(feature_range=(-1, 1))}
+Score: [427.7763533]; Best Score: [427.7763533]'''
+# Y1
+'''Number of points with difference > 200: 237
+Best Params: {'shifting': 1, 'scaling': 0, 'step_size': 17, 'forward': 1}
+Score: [250.26284924]; Best Score: [250.26284924]'''
+# Z1
+'''Number of points with difference > 200: 912
+Best Params: {'shifting': 1, 'scaling': 0, 'step_size': 16, 'forward': 1}
+Score: [263.54339314]; Best Score: [263.54339314]'''
+
+# current iteration:
+# X
+'''Best Params: {'max_depth': 11, 'learning_rate': 0.06, 'subsample': 0.7, 'colsample_bytree': 0.6, 'colsample_bylevel': 0.9, 'shifting': 1, 'scaling': 0, 'step_size': 32, 'forward': 1}
+Score: [177.19018434]; Best Score: [177.19018434]'''
