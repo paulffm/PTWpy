@@ -11,8 +11,10 @@ from scipy.signal import butter, cheby1, filtfilt
 from sklearn.ensemble import RandomForestRegressor
 import xgboost as xgb
 
+#### settings ###
+# Changes: numerical binning
 
-def plot_pred(data, y_pred, y_butter, y, idx, axis):
+def plot_pred(data, y_pred, y, idx, axis):
     '''
     :param y_pred:
     :param y_butter:
@@ -25,7 +27,7 @@ def plot_pred(data, y_pred, y_butter, y, idx, axis):
     X_diff_v = X_diff[f'{axis}1_v_dir_lp']
     X_diff_a = X_diff[f'{axis}1_a_dir_lp']
     y_diff_idx = X_diff.index
-    y_mostd = y_butter[idx]
+    y_mostd = np.asarray(y.iloc[idx])
 
     # plot of 'normal' current, filtered current, predicted current and all points with diff > 0.1
     # f'{axis}1_v_dir_lp', f'{axis}1_a_dir_lp'
@@ -34,8 +36,6 @@ def plot_pred(data, y_pred, y_butter, y, idx, axis):
                                name=f'{axis}1_FR_lp'))
     fig_v.add_trace(go.Scatter(x=data[f'{axis}1_v_dir_lp'], y=y_pred.flatten(),
                                name=f'{axis}1_FR_lp pred'))
-    fig_v.add_trace(go.Scatter(x=data[f'{axis}1_v_dir_lp'], y=y_butter.flatten(),
-                               name=f'{axis}1_FR_lp filtered'))
     fig_v.add_trace(go.Scatter(x=X_diff_v, y=y_mostd.flatten(),
                                name=f'most difference', mode='markers',
                                marker=dict(size=10)))
@@ -51,8 +51,6 @@ def plot_pred(data, y_pred, y_butter, y, idx, axis):
                                name=f'{axis}1_FR_lp'))
     fig_a.add_trace(go.Scatter(x=data[f'{axis}1_a_dir_lp'], y=y_pred.flatten(),
                                name=f'{axis}1_FR_lp pred'))
-    fig_a.add_trace(go.Scatter(x=data[f'{axis}1_a_dir_lp'], y=y_butter.flatten(),
-                               name=f'{axis}1_FR_lp filtered'))
     fig_a.add_trace(go.Scatter(x=X_diff_a, y=y_mostd.flatten(),
                                name=f'most difference', mode='markers',
                                marker=dict(size=10)))
@@ -69,8 +67,6 @@ def plot_pred(data, y_pred, y_butter, y, idx, axis):
                                name=f'{axis}1_FR_lp'))
     fig_t.add_trace(go.Scatter(x=y.index, y=y_pred.flatten(),
                                name=f'{axis}1_FR_lp pred'))
-    fig_t.add_trace(go.Scatter(x=y.index, y=y_butter.flatten(),
-                               name=f'{axis}1_FR_lp filtered'))
     fig_t.add_trace(go.Scatter(x=y_diff_idx, y=y_mostd.flatten(),
                                name=f'most difference', mode='markers',
                                marker=dict(size=10)))
@@ -142,7 +138,7 @@ class random_search:
         elif model == 'XGBoost':
 
             params = {'max_depth': randint(3, 20),
-                           'learning_rate': choice([0.01, 0.025, 0.03, 0.035, 0.04, 0.05, 0.06, 0.07]),
+                           'learning_rate': choice([0.025, 0.0275, 0.03, 0.035, 0.04, 0.05]),
                            'subsample': choice([0.3, 0.4, 0.5, 0.6, 0.7]),
                            'colsample_bytree': choice([0.3, 0.4, 0.5, 0.6]),
                            'colsample_bylevel': choice([0.3, 0.5, 0.6, 0.7, 0.9, 1])}
@@ -166,10 +162,10 @@ class random_search:
         # inverse transformation
         if params['scaling'] == 1:
             y = params['scaler_y_m'].inverse_transform(y)
-            y = params['scaler_y_r'].inverse_transform(y)
+            #y = params['scaler_y_r'].inverse_transform(y)
 
             y_pred = params['scaler_y_m'].inverse_transform(np.asarray(y_pred).reshape(-1, 1))
-            y_pred = params['scaler_y_r'].inverse_transform(y_pred)
+            #y_pred = params['scaler_y_r'].inverse_transform(y_pred)
 
         # max error
         y_diff = np.abs((y) - (y_pred.reshape(-1, 1)))
@@ -203,7 +199,7 @@ class random_search:
 
             # params as scipy object: and rest
             params['shifting'] = randint(0, 1)
-            params['scaling'] = randint(0, 1)
+            params['scaling'] = 0 #randint(0, 1)
 
             inp = [f'{self.axis}1_v_dir_lp', f'{self.axis}1_a_dir_lp']
             # inp.append(params['inputs'])
@@ -216,15 +212,24 @@ class random_search:
                 params['forward'] = forw
                 X = data_shift(X, window, forw)
 
+
+            # insert binning
+            data['BinV'] = pd.qcut(data[f'{self.axis}1_v_dir_lp'], 4, labels=False)
+            data['BinA'] = pd.qcut(data[f'{self.axis}1_a_dir_lp'], 4, labels=False)
+            data['MeanV'] = data[f'{self.axis}1_v_dir_lp'].rolling(5).mean()
+            data['MeanA'] = data[f'{self.axis}1_a_dir_lp'].rolling(5).mean()
+            data['StdV'] = data[f'{self.axis}1_v_dir_lp'].rolling(5).mean()
+            data['StdA'] = data[f'{self.axis}1_a_dir_lp'].rolling(5).mean()
+
             if params['scaling'] == 1:
                 method = choice(['Standard', 'MinMax', 'MinMax(-1.1)'])
                 params['scaling_method'] = method
 
-                scaler_x_r = RobustScaler()
+                '''scaler_x_r = RobustScaler()
                 scaler_y_r = RobustScaler()
                 X = scaler_x_r.fit_transform(X)
                 y = scaler_y_r.fit_transform(np.asarray(y).reshape(-1, 1))
-                params['scaler_y_r'] = scaler_y_r
+                params['scaler_y_r'] = scaler_y_r'''
 
                 scaler_x_m, scaler_y_m = scaling_method(method)
                 X = scaler_x_m.fit_transform(X)
@@ -248,9 +253,6 @@ class random_search:
             print(f'Score: {score}; Best Score: {self.best_score}')
 
         return best_ypred, best_idx
-
-
-
 
 
 def main():
@@ -292,31 +294,27 @@ def main():
     data[f'{axis}1_FR_lp'] = data[f'{axis}1_FM_lp'] - data[f'{axis}1_FB_dir_lp']
     y = data[f'{axis}1_FR_lp']
     data = data.drop([f'{axis}1_FR_lp'], axis=1)
-    # print(data)
+    print(data)
 
-    # filter signals
-    order = 1
-    b, a = butter(order, Wn=0.1, btype='lowpass')
-    y_butter = filtfilt(b, a, y, axis=0)
 
     # plot score
-    y_pred = np.loadtxt(f'/Users/paulheller/Desktop/PTW_Data/KohnData/X/y_pred_{axis}.csv', delimiter=',')
-    idx = np.loadtxt(f'/Users/paulheller/Desktop/PTW_Data/KohnData/X/idx_{axis}.csv', delimiter=',').astype(int)
-    print(idx, idx.shape)
-    print(y_pred, y_pred.shape)
-    plot_pred(data, y_pred, y_butter, y, idx, axis)
+    #y_pred = np.loadtxt(f'/Users/paulheller/Desktop/PTW_Data/KohnData/X/y_pred_{axis}.csv', delimiter=',')
+    #idx = np.loadtxt(f'/Users/paulheller/Desktop/PTW_Data/KohnData/X/idx_{axis}.csv', delimiter=',').astype(int)
+    #print(idx, idx.shape)
+    #print(y_pred, y_pred.shape)
+    #plot_pred(data, y_pred, y_butter, y, idx, axis)
 
-    '''n_iter = 1
+    n_iter = 30
     # XGBoost, RandomForrest
     model = 'XGBoost'
     # start random search:
     search_rg = random_search(n_iter, axis)
-    y_pred, idx = search_rg.fit_predict(model, data, y_butter)
+    y_pred, idx = search_rg.fit_predict(model, data, y)
     print('Best params', search_rg.best_params)
     print('Best score', search_rg.best_score)
 
     # plot score
-    plot_pred(data, y_pred, y_butter, y, idx, axis)'''
+    plot_pred(data, y_pred, y, idx, axis)
 
 
 if __name__ == '__main__':
@@ -333,6 +331,10 @@ Best Params: {'shifting': 1, 'scaling': 0, 'step_size': 16, 'forward': 1}
 Score: [263.54339314]; Best Score: [263.54339314]'''
 '''Best params {'max_depth': 16, 'learning_rate': 0.025, 'subsample': 0.5, 'colsample_bytree': 0.4, 'colsample_bylevel': 1, 'shifting': 1, 'scaling': 1, 'step_size': 9, 'forward': 1, 'scaling_method': 'MinMax(-1.1)', 'scaler_y_r': RobustScaler(), 'scaler_y_m': MinMaxScaler(feature_range=(-1, 1))}
 Best score [400.490167]'''
+
+'''Number of points with difference > 200: 668
+Best Params: {'max_depth': 17, 'learning_rate': 0.03, 'subsample': 0.4, 'colsample_bytree': 0.4, 'colsample_bylevel': 0.6, 'shifting': 1, 'scaling': 1, 'step_size': 20, 'forward': 0, 'scaling_method': 'MinMax(-1.1)', 'scaler_y_r': RobustScaler(), 'scaler_y_m': MinMaxScaler(feature_range=(-1, 1))}
+Score: [427.7763533]; Best Score: [427.7763533]'''
 # Y1
 '''Number of points with difference > 200: 237
 Best Params: {'shifting': 1, 'scaling': 0, 'step_size': 17, 'forward': 1}
