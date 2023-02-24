@@ -4,13 +4,12 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 import plotly.graph_objects as go
 from sklearn.preprocessing import MinMaxScaler, RobustScaler, StandardScaler
-from sklearn.metrics import mean_squared_error
-from sklearn.metrics import mean_absolute_error
-from random import uniform, randint, choice, choices
-from scipy.signal import butter, cheby1, filtfilt
 from sklearn.ensemble import RandomForestRegressor
-import xgboost as xgb
-
+import plotly.graph_objects as go
+from plotly.offline import plot
+from matplotlib import pyplot as plt
+from sklearn.tree import DecisionTreeRegressor
+import seaborn as sns
 
 #### settings ###
 # Changes: numerical binning
@@ -198,10 +197,12 @@ def main():
     # output
     # 'X', 'Y', 'Z'
     axis = 'Z'
-    # insert binning: muss es hier machen und schon die inputs rausschneiden, da ich sonst inkonsistent bekomme mit der Länge des DF
+    # insert binning: muss es hier machen und schon die inputs rausschneiden,
+    # da ich sonst inkonsistent bekomme mit der Länge des DF
+
     data = data[[f'{axis}1_v_dir_lp', f'{axis}1_a_dir_lp', f'{axis}1_FM_lp', f'{axis}1_FB_dir_lp']]
-    '''data['BinV'] = pd.qcut(data[f'{axis}1_v_dir_lp'], 4, labels=False)
-    data['BinA'] = pd.qcut(data[f'{axis}1_a_dir_lp'], 4, labels=False)'''
+    data['BinV'] = pd.qcut(data[f'{axis}1_v_dir_lp'], 4, labels=False)
+    data['BinA'] = pd.qcut(data[f'{axis}1_a_dir_lp'], 4, labels=False)
     data['MeanV1'] = data[f'{axis}1_v_dir_lp'].rolling(5000).mean()
     data['MeanA1'] = data[f'{axis}1_a_dir_lp'].rolling(5000).mean()
     data['StdV1'] = data[f'{axis}1_v_dir_lp'].rolling(5000).mean()
@@ -218,8 +219,7 @@ def main():
     data.fillna(method="ffill")
     y = data[f'{axis}1_FR_lp']
     X = data.drop([f'{axis}1_FR_lp', f'{axis}1_FB_dir_lp', f'{axis}1_FM_lp'], axis=1)
-    print(X)
-    print(y, y.shape)
+
     params = {'max_depth': 11,
               'learning_rate': 0.06,
               'subsample': 0.7,
@@ -236,29 +236,52 @@ def main():
         inp_shift = [f'{axis}1_v_dir_lp', f'{axis}1_a_dir_lp']
         X = data_shift(X, window, forw, inp_shift)
 
-
     print('X after shift', data)  # , X[f'{axis}1_FR_lp', f'{axis}1_FB_dir_lp', f'{axis}1_FM_lp'])
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=1)
-    model = xgb.XGBRegressor(learning_rate=params['learning_rate'], subsample=params['subsample'],
-                             colsample_bytree=params['colsample_bytree'],
-                             colsample_bylevel=params['colsample_bylevel'])
-    print('X_train', X_train)
-    print('fitting the model')
-    model.fit(X_train, y_train.ravel())
 
+
+
+    # scikit learn
     print('predict')
+    model = DecisionTreeRegressor()
+    # model = RandomForestRegressor(n_estimators=100, verbose=2)
+    model.fit(np.asarray(X_train), y_train)  # , validation_split=0.3)
     y_pred = model.predict(X)
-    print('y_pred', y_pred, y_pred.shape)
 
     score, idx, y_pred = calc_score(y_pred, y)
     print('Best score:', score)
 
     # plot score
-    plot_pred(data, y_pred, y, idx, axis)
+    #plot_pred(data, y_pred, y, idx, axis)
+
+    # calculate feature importance
+    feat_imp = model.feature_importances_
+    # print('feat_imp:', feat_imp, feat_imp.shape)
+    idx = np.argsort(feat_imp)
+    idx = idx[::-1]
+    feat_imp_sort = np.take_along_axis(feat_imp, idx, axis=0)
+    X_sort = X.iloc[:, idx]
+
+
+    # how many features
+    k = 10
+    X_sort = X_sort.iloc[:, :k]
+    feat_imp_k = feat_imp_sort[:k]
+    print('sorted:', feat_imp_k)
+    plt.barh(X_sort.columns, feat_imp_k)
+    plt.title('feature importance')
+    plt.show()
+
+    corr_matrix = X_sort.corr(method='pearson')
+    # print(corr_matrix)
+    f, ax = plt.subplots(figsize=(16, 8))
+    sns.heatmap(corr_matrix, annot=True, fmt='.2f', linewidth=0.4, annot_kws={'size': 10}, cmap='coolwarm', ax=ax)
+    plt.xticks(fontsize=10)
+    plt.yticks(fontsize=10)
+    plt.show()
 
 
 if __name__ == '__main__':
     main()
-    # X Best score:
-    # No forward: 60 back
-    '''Number of points with difference > 200: 1 Best score: [200.35260356]'''
+
+
