@@ -3,14 +3,8 @@ from random import randint, uniform, choice
 from sklearn.utils.fixes import loguniform
 import numpy as np
 import math
+import random
 
-class pattern_finder:
-    def __init__(self, idx1, idx2):
-        self.idx1 = idx1
-        self.idx2 = idx2
-
-    def find_motifs(self, data):
-        self.pattern = data[self.idx1:self.idx2]
 
 
 
@@ -40,12 +34,36 @@ def main():
     print(params['unit1'])
     params['unit1'] = 1
     print(params['unit1'])'''
-    a = np.arange(0, 11)
-    print(a)
-    print(choice(np.arange(0, 11)))
-    print(choice([0.5, 0.6, 0.7]))
-    print(choice([np.arange(0, 1, 0.5)]))
-    params['hallo'] = randint(0, 1)
+
+    param_distribution = {'max_depth': list(range(6, 15)),
+              'learning_rate': [0.050, 0.055, 0.0575, 0.06, 0.065, 0.07, 0.075, 0.8],
+              'subsample': [0.4, 0.5, 0.6, 0.7, 0.8],
+              'colsample_bytree': [0.5, 0.6, 0.7, 0.8, 0.9],
+              'colsample_bylevel': [0.4, 0.5, 0.6, 0.7, ],
+              'min_child_weight': list(range(1, 2))
+              }
+    print(param_distribution)
+    param = {k: random.choice(dist) for k, dist in param_distribution.items()}
+    print(param)
+
+    param_distributions = {
+        'learning_rate': uniform(0.001, 0.1),
+        'num_layers': randint(1, 5),
+        'num_neurons': randint(10, 100)
+    }
+    param1 = {k: dist.rvs() for k, dist in param_distributions.items()}
+    print(param1)
+
+    param_distribution = {'max_depth': randint(6, 15),
+              'learning_rate': [0.050, 0.055, 0.0575, 0.06, 0.065, 0.07, 0.075, 0.8],
+              'subsample': [0.4, 0.5, 0.6, 0.7, 0.8],
+              'colsample_bytree': [0.5, 0.6, 0.7, 0.8, 0.9],
+              'colsample_bylevel': [0.4, 0.5, 0.6, 0.7, ],
+              'min_child_weight': randint(1, 2)
+              }
+    params = {k: dist.rvs() for k, dist in param_distribution.items()}
+    print(params)
+
 
 
 if __name__ == '__main__':
