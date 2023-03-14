@@ -23,7 +23,7 @@ def main():
 
     # data: filtering better
     # /Users/paulheller/Desktop/PTW_Data/KohnData/
-    file = '2023-01-16T1253_MRM_DMC850_20220509_Filter.csv'
+    file = '/Users/paulheller/Desktop/PTW_Data/KohnData/2023-01-16T1253_MRM_DMC850_20220509_Filter.csv'
     data = pd.read_csv(file, sep=',', header=0, index_col=0, parse_dates=True, decimal=".")
     print('header', data.columns.values.tolist())
     # print(data)
@@ -73,13 +73,19 @@ def main():
     model = 'XGBoost'
 
     # muss leider als liste noch definiert sein
-    param_distribution = {'max_depth': list(range(6, 15)),
-              'learning_rate': [0.050, 0.055, 0.0575, 0.06, 0.065, 0.07, 0.075, 0.8],
-              'subsample': [0.4, 0.5, 0.6, 0.7, 0.8],
-              'colsample_bytree': [0.5, 0.6, 0.7, 0.8, 0.9],
-              'colsample_bylevel': [0.4, 0.5, 0.6, 0.7, ],
-              'min_child_weight': list(range(1, 2))
-              }
+    param_distribution = {
+        'max_depth': list(range(6, 15)),
+        'learning_rate': [0.050, 0.055, 0.0575, 0.06, 0.065, 0.07, 0.075, 0.8],
+        'subsample': [0.4, 0.5, 0.6, 0.7, 0.8],
+        'colsample_bytree': [0.5, 0.6, 0.7, 0.8, 0.9],
+        'colsample_bylevel': [0.4, 0.5, 0.6, 0.7, ],
+        'min_child_weight': list(range(1, 2)),
+        'shifting': list(range(0, 1)),
+        'step_size': list(range(20, 80)),
+        'forward': list(range(0, 1)),
+        'scaling': list(range(0, 1)),
+        'scaling_method': ['MinMax', 'MinMax(-1.1)', 'Standard']
+    }
 
     search_rg = RandomSearch(param_distribution, n_iter, axis)
 
@@ -98,3 +104,6 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+    '''    y_diff = np.abs((np.asarray(y).reshape(-1, 1) - y_pred.reshape(-1, 1)))
+ValueError: operands could not be broadcast together with shapes (525454,1) (210182,1) '''

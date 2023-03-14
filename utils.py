@@ -157,7 +157,7 @@ def calc_score(y_pred, y, params: dict, threshold=200):
 
     return score.flatten(), idx, y_pred
 
-def rolling_stats(data: pd.Dataframe, window_sizes: list, axis):
+def rolling_stats(data: pd.DataFrame, window_sizes: list, axis):
     '''
     :param data:
     :param window_sizes:
@@ -184,8 +184,8 @@ def evaluate_model(X, y, params):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=1)
     model.fit(X_train, y_train)
 
-    # Evaluate the model on the testing data
-    y_pred = model.predict(X_test)
+    # Evaluate the model on the testing data: in our case: testing data is the whole dataset
+    y_pred = model.predict(X)
     score, idx, y_pred = calc_score(np.asarray(y_pred).reshape(-1, 1), np.asarray(y).reshape(-1, 1), params)
 
     return score, idx, y_pred

@@ -19,7 +19,7 @@ class RandomSearch:
 
 
     def fit_predict(self, X, y):
-        best_score = -np.inf
+        best_score = np.inf
         best_params = dict()
         best_ypred = []
         best_idx = []
@@ -27,7 +27,7 @@ class RandomSearch:
         for i in range(self.n_iter):
             # Sample a set of parameters from the distributions
             #params = {k: dist.rvs() for k, dist in self.param_distributions.items()}
-
+            print(f'Iteration: {i + 1}')
             params = {k: random.choice(dist) for k, dist in self.param_distributions.items()}
 
             if params['shifting'] == 1:
